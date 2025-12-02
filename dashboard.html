@@ -14,7 +14,7 @@
     h1 { font-size: 1.4rem; margin-bottom: 4px; }
     p { font-size: 0.9rem; margin-top: 0; color: #555; }
 
-    /* 버튼 스타일 */
+    /* 우상단 버튼 컨테이너 */
     #top-buttons {
       position: absolute;
       top: 10px;
@@ -23,8 +23,9 @@
       gap: 8px;
     }
 
+    /* 공통 버튼 스타일 (연한 회색, 안 튀게) */
     .top-button {
-      background-color: #e5e5e5; /* 연한 회색 */
+      background-color: #e5e5e5;
       border: 1px solid #ccc;
       padding: 6px 10px;
       font-size: 0.8rem;
@@ -69,7 +70,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
-    /* 🔹 Firebase Config (submit.html과 동일하게!) */
+    /* 🔹 Firebase Config (submit.html과 동일해야 함!) */
     const firebaseConfig = {
       apiKey: "AIzaSyD85EPLcL_j7s-WOQ1FDimMKEYmzBFzapE",
       authDomain: "bean-counting.firebaseapp.com",
@@ -96,7 +97,7 @@
           tooltip: {
             callbacks: {
               label: (context) => {
-                const p = context.raw;
+                const p = context.raw;        // {x, y, name}
                 const name = p.name || '이름 미상';
                 const round = context.parsed.x;
                 const value = context.parsed.y;
@@ -111,7 +112,8 @@
             position: 'bottom',
             title: { display: true, text: '회차' },
             ticks: { stepSize: 1, callback: v => `${v}회차` },
-            min: 1, max: 6
+            min: 1,
+            max: 6
           },
           y: {
             title: { display: true, text: '예측치' }
@@ -120,27 +122,30 @@
       }
     });
 
+    /* 🔹 그룹별 색상 */
     const groupColors = [
       '#e41a1c', '#377eb8', '#4daf4a', '#984ea3',
       '#ff7f00', '#a65628', '#f781bf', '#999999'
     ];
 
-    /* 🔹 실시간 Firestore Listener */
+    /* 🔹 Firestore 실시간 리스너 */
     db.collection('predictions')
       .orderBy('round', 'asc')
       .onSnapshot((snapshot) => {
-        const groupMap = {};
+        const groupMap = {};  // { groupName: [{x, y, name}, ...] }
 
         snapshot.forEach((doc) => {
           const data = doc.data();
           const group = (data.group || '기타').toString();
 
-          if (!groupMap[group]) groupMap[group] = [];
-          groupMap[group].push({
-            x: data.round,
-            y: data.value,
-            name: data.name
-          });
+          if (typeof data.round === 'number' && typeof data.value === 'number') {
+            if (!groupMap[group]) groupMap[group] = [];
+            groupMap[group].push({
+              x: data.round,
+              y: data.value,
+              name: data.name || ''
+            });
+          }
         });
 
         const groupNames = Object.keys(groupMap).sort();
@@ -156,37 +161,42 @@
       });
 
     /* ------------------------------- */
-    /*  🔥 CSV 다운로드 기능             */
+    /*  🔥 CSV 다운로드 기능 (BOM 포함, 한글 안 깨짐) */
     /* ------------------------------- */
 
     document.getElementById("downloadCsvBtn").addEventListener("click", async () => {
       const snapshot = await db.collection("predictions").get();
-      let rows = [["name","group","round","value","timestamp"]];
+      const rows = [["name","group","round","value","timestamp"]];
 
       snapshot.forEach(doc => {
         const d = doc.data();
+        const ts =
+          d.createdAt && d.createdAt.toDate
+            ? d.createdAt.toDate().toISOString()
+            : "";
         rows.push([
-          d.name,
-          d.group,
-          d.round,
-          d.value,
-          d.createdAt?.toDate?.() || ""
+          d.name ?? "",
+          d.group ?? "",
+          d.round ?? "",
+          d.value ?? "",
+          ts
         ]);
       });
 
+      // 🔹 앞에 \ufeff(BOM)를 붙여서 엑셀이 UTF-8로 인식하게 만듦
       const csvContent =
-        "data:text/csv;charset=utf-8," +
+        "data:text/csv;charset=utf-8,\ufeff" +
         rows.map(e => e.join(",")).join("\n");
 
       const link = document.createElement("a");
       link.href = encodeURI(csvContent);
-      link.download = `predictions_backup_${new Date().toISOString().slice(0,10)}.csv`;
+      link.download =
+        "predictions_backup_" + new Date().toISOString().slice(0, 10) + ".csv";
       link.click();
     });
 
-
     /* ------------------------------- */
-    /*  🔥 초기화 기능 (비밀번호 포함)   */
+    /*  🔥 초기화 기능 (비밀번호 필요) */
     /* ------------------------------- */
 
     const RESET_PASSWORD = "SNU-TA-Reset-9237!";
