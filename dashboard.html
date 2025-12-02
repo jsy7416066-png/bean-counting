@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>예측치 대시보드</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    p { font-size: 0.9rem; margin-top: 0; color: #555; }
+    #chart-container {
+      position: relative;
+      height: 70vh;
+      max-height: 600px;
+      margin-top: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>예측치 산점도 (실시간)</h1>
+  <p>
+    X축: 회차(1~6), Y축: 예측치<br/>
+    색깔: <b>그룹 번호</b>별로 구분되어 표시됩니다.
+  </p>
+
+  <div id="chart-container">
+    <canvas id="predictionChart"></canvas>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore-compat.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    // 🔹 1) submit.html과 완전히 같은 firebaseConfig 써야 함
+    const firebaseConfig = {
+      apiKey: "AIzaSyD85EPLcL_j7s-WOQ1FDimMKEYmzBFzapE",
+  authDomain: "bean-counting.firebaseapp.com",
+  projectId: "bean-counting",
+  storageBucket: "bean-counting.firebasestorage.app",
+  messagingSenderId: "700257917650",
+  appId: "1:700257917650:web:c7821b3e1b1b5f1a366b0b"
+    };
+
+    // Firebase 초기화
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const ctx = document.getElementById('predictionChart').getContext('2d');
+
+    // 🔹 2) Chart.js 산점도 초기화 (데이터셋은 나중에 채움)
+    const predictionChart = new Chart(ctx, {
+      type: 'scatter',
+      data: {
+        datasets: []
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true }
+        },
+        scales: {
+          x: {
+            type: 'linear',
+            position: 'bottom',
+            title: { display: true, text: '회차' },
+            ticks: {
+              stepSize: 1,
+              callback: (value) => `${value}회차`
+            },
+            min: 1,
+            max: 6
+          },
+          y: {
+            title: { display: true, text: '예측치' }
+          }
+        }
+      }
+    });
+
+    // 🔹 3) 그룹별 색상 팔레트 (그룹이 많으면 순환)
+    const groupColors = [
+      '#e41a1c', '#377eb8', '#4daf4a', '#984ea3',
+      '#ff7f00', '#a65628', '#f781bf', '#999999'
+    ];
+
+    // 🔹 4) Firestore 실시간 구독 → 그룹별로 데이터셋 구성
+    db.collection('predictions')
+      .orderBy('round', 'asc')
+      .onSnapshot((snapshot) => {
+        const groupMap = {};  // { groupName: [{x, y}, ...] }
+
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const group = (data.group || '기타').toString();
+
+          if (typeof data.round === 'number' && typeof data.value === 'number') {
+            if (!groupMap[group]) groupMap[group] = [];
+            groupMap[group].push({
+              x: data.round,
+              y: data.value
+            });
+          }
+        });
+
+        const groupNames = Object.keys(groupMap).sort();
+        const datasets = groupNames.map((groupName, idx) => ({
+          label: `그룹 ${groupName}`,
+          data: groupMap[groupName],
+          pointRadius: 4,
+          backgroundColor: groupColors[idx % groupColors.length]
+        }));
+
+        predictionChart.data.datasets = datasets;
+        predictionChart.update();
+      }, (error) => {
+        console.error('실시간 데이터 구독 중 오류:', error);
+      });
+
+  </script>
+</body>
+</html>
