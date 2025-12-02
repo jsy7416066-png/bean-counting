@@ -13,15 +13,45 @@
     }
     h1 { font-size: 1.4rem; margin-bottom: 4px; }
     p { font-size: 0.9rem; margin-top: 0; color: #555; }
+
+    /* 버튼 스타일 */
+    #top-buttons {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .top-button {
+      background-color: #e5e5e5; /* 연한 회색 */
+      border: 1px solid #ccc;
+      padding: 6px 10px;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #333;
+    }
+    .top-button:hover {
+      background-color: #dcdcdc;
+    }
+
     #chart-container {
       position: relative;
       height: 70vh;
       max-height: 600px;
-      margin-top: 16px;
+      margin-top: 40px;
     }
   </style>
 </head>
 <body>
+
+  <!-- 상단 우측 버튼들 -->
+  <div id="top-buttons">
+    <button id="downloadCsvBtn" class="top-button">CSV 다운로드</button>
+    <button id="resetBtn" class="top-button">초기화</button>
+  </div>
+
   <h1>예측치 산점도 (실시간)</h1>
   <p>
     X축: 회차(1~6), Y축: 예측치<br/>
@@ -36,12 +66,10 @@
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore-compat.js"></script>
-
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
-    // 🔹 1) submit.html과 완전히 같은 firebaseConfig 써야 함
+    /* 🔹 Firebase Config (submit.html과 동일하게!) */
     const firebaseConfig = {
       apiKey: "AIzaSyD85EPLcL_j7s-WOQ1FDimMKEYmzBFzapE",
       authDomain: "bean-counting.firebaseapp.com",
@@ -56,12 +84,10 @@
 
     const ctx = document.getElementById('predictionChart').getContext('2d');
 
-    // 🔹 2) Chart.js 산점도 초기화
+    /* 🔹 차트 초기화 */
     const predictionChart = new Chart(ctx, {
       type: 'scatter',
-      data: {
-        datasets: []
-      },
+      data: { datasets: [] },
       options: {
         responsive: true,
         maintainAspectRatio: false,
@@ -69,9 +95,9 @@
           legend: { display: true },
           tooltip: {
             callbacks: {
-              label: function (context) {
-                const point = context.raw;           // {x, y, name}
-                const name = point.name || '이름 미상';
+              label: (context) => {
+                const p = context.raw;
+                const name = p.name || '이름 미상';
                 const round = context.parsed.x;
                 const value = context.parsed.y;
                 return `${name} - ${round}회차: ${value}`;
@@ -84,12 +110,8 @@
             type: 'linear',
             position: 'bottom',
             title: { display: true, text: '회차' },
-            ticks: {
-              stepSize: 1,
-              callback: (value) => `${value}회차`
-            },
-            min: 1,
-            max: 6
+            ticks: { stepSize: 1, callback: v => `${v}회차` },
+            min: 1, max: 6
           },
           y: {
             title: { display: true, text: '예측치' }
@@ -98,35 +120,32 @@
       }
     });
 
-    // 🔹 3) 그룹별 색상 팔레트
     const groupColors = [
       '#e41a1c', '#377eb8', '#4daf4a', '#984ea3',
       '#ff7f00', '#a65628', '#f781bf', '#999999'
     ];
 
-    // 🔹 4) Firestore 실시간 구독 → 그룹별로 데이터셋 구성
+    /* 🔹 실시간 Firestore Listener */
     db.collection('predictions')
       .orderBy('round', 'asc')
       .onSnapshot((snapshot) => {
-        const groupMap = {};  // { groupName: [{x, y, name}, ...] }
+        const groupMap = {};
 
         snapshot.forEach((doc) => {
           const data = doc.data();
           const group = (data.group || '기타').toString();
 
-          if (typeof data.round === 'number' && typeof data.value === 'number') {
-            if (!groupMap[group]) groupMap[group] = [];
-            groupMap[group].push({
-              x: data.round,
-              y: data.value,
-              name: data.name || ''   // 🔸 이름 함께 저장
-            });
-          }
+          if (!groupMap[group]) groupMap[group] = [];
+          groupMap[group].push({
+            x: data.round,
+            y: data.value,
+            name: data.name
+          });
         });
 
         const groupNames = Object.keys(groupMap).sort();
         const datasets = groupNames.map((groupName, idx) => ({
-          label: `그룹 ${groupName}`,              // 범례에는 여전히 그룹 표시
+          label: `그룹 ${groupName}`,
           data: groupMap[groupName],
           pointRadius: 4,
           backgroundColor: groupColors[idx % groupColors.length]
@@ -134,10 +153,63 @@
 
         predictionChart.data.datasets = datasets;
         predictionChart.update();
-      }, (error) => {
-        console.error('실시간 데이터 구독 중 오류:', error);
       });
 
+    /* ------------------------------- */
+    /*  🔥 CSV 다운로드 기능             */
+    /* ------------------------------- */
+
+    document.getElementById("downloadCsvBtn").addEventListener("click", async () => {
+      const snapshot = await db.collection("predictions").get();
+      let rows = [["name","group","round","value","timestamp"]];
+
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        rows.push([
+          d.name,
+          d.group,
+          d.round,
+          d.value,
+          d.createdAt?.toDate?.() || ""
+        ]);
+      });
+
+      const csvContent =
+        "data:text/csv;charset=utf-8," +
+        rows.map(e => e.join(",")).join("\n");
+
+      const link = document.createElement("a");
+      link.href = encodeURI(csvContent);
+      link.download = `predictions_backup_${new Date().toISOString().slice(0,10)}.csv`;
+      link.click();
+    });
+
+
+    /* ------------------------------- */
+    /*  🔥 초기화 기능 (비밀번호 포함)   */
+    /* ------------------------------- */
+
+    const RESET_PASSWORD = "SNU-TA-Reset-9237!";
+
+    document.getElementById("resetBtn").addEventListener("click", async () => {
+      const input = prompt("초기화 비밀번호를 입력하세요:");
+
+      if (input !== RESET_PASSWORD) {
+        alert("비밀번호가 올바르지 않습니다.");
+        return;
+      }
+
+      const really = confirm("⚠ 정말 모든 데이터를 삭제할까요?");
+      if (!really) return;
+
+      const snapshot = await db.collection("predictions").get();
+      const batch = db.batch();
+
+      snapshot.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+
+      alert("모든 데이터가 초기화되었습니다!");
+    });
   </script>
 </body>
 </html>
