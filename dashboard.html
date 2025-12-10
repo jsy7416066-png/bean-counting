@@ -25,7 +25,7 @@
     }
 
     .top-button {
-      background-color: #e5e5e5;
+      background-color: #e5e5e5; /* 연한 회색 */
       border: 1px solid #ccc;
       padding: 6px 10px;
       font-size: 0.8rem;
@@ -37,27 +37,75 @@
       background-color: #dcdcdc;
     }
 
+    /* 회차 버튼 영역 */
+    #round-buttons {
+      margin-top: 8px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .round-button {
+      background-color: #f0f0f0;
+      border: 1px solid #ccc;
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .round-button.active {
+      background-color: #ddd;
+      font-weight: 600;
+    }
+
     #chart-container {
       position: relative;
       height: 70vh;
       max-height: 600px;
-      margin-top: 40px;
+      margin-top: 16px;
     }
 
-    #roundInfo {
-      margin-top: 8px;
-      font-size: 0.85rem;
-      color: #444;
-      white-space: pre-line; /* 줄바꿈 표시용 */
+    /* 회차 통계 오버레이 */
+    #roundOverlay {
+      position: absolute;
+      top: 10%;
+      left: 10%;
+      width: 80%;
+      height: 60%;
+      background-color: rgba(255, 255, 255, 0.92); /* 연한 배경 */
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      padding: 24px;
+      display: none;
+      z-index: 5;
+      box-sizing: border-box;
+    }
+    #roundOverlay h2 {
+      margin-top: 0;
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+    #roundOverlay p {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 6px 0;
+    }
+    #roundOverlay ul {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+    #roundOverlay li {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin: 2px 0;
     }
   </style>
 </head>
 <body>
 
-  <!-- 상단 우측 버튼들 -->
+  <!-- 상단 우측 버튼들 (실제값 공개를 가장 왼쪽에) -->
   <div id="top-buttons">
+    <button id="toggleActualBtn" class="top-button">실제값 공개</button>
     <button id="downloadCsvBtn" class="top-button">CSV 다운로드</button>
-    <button id="toggleActualBtn" class="top-button">Actual 1616 표시</button>
     <button id="resetBtn" class="top-button">초기화</button>
   </div>
 
@@ -66,14 +114,25 @@
     X축: 회차(1~6), Y축: 예측치<br/>
     색깔: <b>그룹 번호</b>별로 구분되어 표시됩니다.<br/>
     점에 마우스를 올리면 <b>학생 이름 & 그 학생의 전체 추세선</b>이 보입니다.<br/>
-    아래 정보창에 마우스를 올린 회차의 <b>그룹별 평균 / 전체 평균 / 평균에 가장 가까운 학생</b>이 표시됩니다.
+    아래 회차 버튼을 눌러 해당 회차의 <b>그룹별 평균 / 전체 평균 / 평균에 가장 가까운 학생</b>을 확인할 수 있습니다.
   </p>
+
+  <!-- 회차 버튼들 -->
+  <div id="round-buttons">
+    <button class="round-button" data-round="1">1회차</button>
+    <button class="round-button" data-round="2">2회차</button>
+    <button class="round-button" data-round="3">3회차</button>
+    <button class="round-button" data-round="4">4회차</button>
+    <button class="round-button" data-round="5">5회차</button>
+    <button class="round-button" data-round="6">6회차</button>
+  </div>
 
   <div id="chart-container">
     <canvas id="predictionChart"></canvas>
-  </div>
 
-  <div id="roundInfo"></div>
+    <!-- 회차 통계 오버레이 -->
+    <div id="roundOverlay"></div>
+  </div>
 
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-app-compat.js"></script>
@@ -81,7 +140,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
-    /* 🔹 Firebase Config (submit.html과 동일하게 교체할 것!) */
+    /* 🔹 Firebase Config (bean-counting 프로젝트) */
     const firebaseConfig = {
       apiKey: "AIzaSyD85EPLcL_j7s-WOQ1FDimMKEYmzBFzapE",
       authDomain: "bean-counting.firebaseapp.com",
@@ -95,21 +154,23 @@
     const db = firebase.firestore();
 
     const ctx = document.getElementById('predictionChart').getContext('2d');
-    const roundInfoEl = document.getElementById('roundInfo');
+    const roundOverlayEl = document.getElementById('roundOverlay');
+    const roundButtons = document.querySelectorAll('.round-button');
 
     const ACTUAL_VALUE = 1616;
     const RESET_PASSWORD  = "SNU-TA-Reset-9237!";
     const ACTUAL_PASSWORD = "1616";
 
-    // 상태 저장용 전역 변수들
-    let baseDatasets = [];        // 그룹별 점들만 들어있는 기본 데이터셋
-    let highlightDataset = null;  // 학생 개별 추세선
-    let actualVisible   = false;  // actual 선 표시 여부
-    let actualUnlocked  = false;  // actual 비밀번호 통과 여부
+    // 상태 변수들
+    let baseDatasets = [];        // 그룹별 점들만
+    let highlightDataset = null;  // 개별 학생 추세선
+    let actualVisible   = false;  // 실제값 선 표시 여부
+    let actualUnlocked  = false;  // 실제값 비번 통과 여부
     let allPoints = [];           // {name, group, round, value}
-    let roundStats = {};          // 회차별 통계 정보
+    let roundStats = {};          // 회차별 통계
+    let currentRoundShown = null; // 현재 오버레이로 표시 중인 회차
 
-    // 실제값(1616) 가로선 데이터셋 생성 함수
+    /* 🔹 실제값(1616) 가로선 데이터셋 */
     function makeActualDataset() {
       const lineData = [];
       for (let r = 1; r <= 6; r++) {
@@ -117,16 +178,16 @@
       }
       return {
         type: 'line',
-        label: `Actual (${ACTUAL_VALUE})`,
+        label: `Actual`,
         data: lineData,
         borderColor: 'red',
-        borderWidth: 3,
+        borderWidth: 4,   // 조금 더 굵게
         pointRadius: 0,
         fill: false
       };
     }
 
-    // 차트 데이터셋을 현재 상태에 맞게 재구성
+    /* 🔹 현재 상태에 맞게 데이터셋 적용 */
     function applyDatasets() {
       const datasets = [...baseDatasets];
 
@@ -142,13 +203,14 @@
       predictionChart.update();
     }
 
-    // 차트 초기화
+    /* 🔹 차트 초기화 (애니메이션 끔) */
     const predictionChart = new Chart(ctx, {
       type: 'scatter',
       data: { datasets: [] },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: false,   // 전체 애니메이션 비활성화
         plugins: {
           legend: { display: true },
           tooltip: {
@@ -176,9 +238,8 @@
             title: { display: true, text: '예측치' }
           }
         },
-        // 포인트/축 위로 마우스 올렸을 때
+        // 포인트 위/밖 hover 시: 학생 추세선만 처리
         onHover: (event, activeElements, chart) => {
-          // 1) 포인트 위에 있을 땐 해당 학생의 전체 추세선 그리기
           if (activeElements.length > 0) {
             const first = activeElements[0];
             const dsIndex = first.datasetIndex;
@@ -210,45 +271,11 @@
               applyDatasets();
             }
           } else {
-            // 마우스가 포인트를 벗어나면 학생 추세선 제거
             if (highlightDataset) {
               highlightDataset = null;
               applyDatasets();
             }
           }
-
-          // 2) 마우스가 어느 회차 근처인지에 따라 회차별 통계 표시
-          const xScale = chart.scales.x;
-          const xVal = xScale.getValueForPixel(event.x);
-          const round = Math.round(xVal);
-
-          if (round >= 1 && round <= 6 && roundStats[round]) {
-            const stats = roundStats[round];
-
-            const groupParts = Object.keys(stats.groupMeans)
-              .sort()
-              .map(g => `그룹 ${g}: ${stats.groupMeans[g].toFixed(1)}`)
-              .join(", ");
-
-            const overallMean = stats.overallMean.toFixed(1);
-            const closest = stats.closest;
-
-            let text = `${round}회차 통계\n`;
-            text += `그룹별 평균: ${groupParts}\n`;
-            text += `전체 평균: ${overallMean}\n`;
-            if (closest) {
-              text += `전체 평균에 가장 가까운 학생: ${closest.name} (값 ${closest.value}, 그룹 ${closest.group})`;
-            }
-
-            roundInfoEl.textContent = text;
-          } else {
-            roundInfoEl.textContent = '';
-          }
-        },
-        onLeave: () => {
-          // 차트 영역을 떠나면 회차 정보는 지우되,
-          // 학생 추세선은 onHover에서 이미 제거됨.
-          roundInfoEl.textContent = '';
         }
       }
     });
@@ -263,7 +290,7 @@
     db.collection('predictions')
       .orderBy('round', 'asc')
       .onSnapshot((snapshot) => {
-        const groupMap = {};   // { groupName: [{x, y, name}, ...] }
+        const groupMap = {};
         allPoints = [];
 
         snapshot.forEach((doc) => {
@@ -285,7 +312,7 @@
           }
         });
 
-        // 기본 데이터셋 구성
+        // 기본 데이터셋
         const groupNames = Object.keys(groupMap).sort();
         baseDatasets = groupNames.map((groupName, idx) => ({
           label: `그룹 ${groupName}`,
@@ -296,8 +323,8 @@
 
         // 회차별 통계 계산
         roundStats = {};
-        const roundGroupValues = {};  // { round: { group: [values] } }
-        const roundAllValues   = {};  // { round: [ {name,group,value} ] }
+        const roundGroupValues = {};
+        const roundAllValues   = {};
 
         allPoints.forEach(p => {
           if (!roundGroupValues[p.round]) roundGroupValues[p.round] = {};
@@ -338,12 +365,11 @@
           };
         }
 
-        // 현재 상태(actual/하이라이트)를 반영해 차트 업데이트
         applyDatasets();
       });
 
     /* ------------------------------- */
-    /*  🔥 CSV 다운로드 (BOM 포함, 한글 안 깨짐) */
+    /*  🔥 CSV 다운로드 (BOM 포함)    */
     /* ------------------------------- */
 
     document.getElementById("downloadCsvBtn").addEventListener("click", async () => {
@@ -377,13 +403,13 @@
     });
 
     /* ------------------------------- */
-    /*  🔥 Actual(1616) 가로선 토글  */
-    /*     - 처음 공개할 때만 비밀번호(1616) 요구 */
+    /*  🔥 실제값(1616) 가로선 토글   */
+    /*     - 처음 공개 시에만 비번 1616 */
     /* ------------------------------- */
 
     document.getElementById("toggleActualBtn").addEventListener("click", () => {
       if (!actualUnlocked) {
-        const input = prompt("Actual 값을 처음 공개할 때 비밀번호를 입력하세요:");
+        const input = prompt("실제값을 처음 공개할 때 비밀번호(1616)를 입력하세요:");
         if (input !== ACTUAL_PASSWORD) {
           alert("비밀번호가 올바르지 않습니다.");
           return;
@@ -393,9 +419,66 @@
 
       actualVisible = !actualVisible;
       document.getElementById("toggleActualBtn").textContent =
-        actualVisible ? "Actual 1616 숨기기" : "Actual 1616 표시";
+        actualVisible ? "실제값 숨기기" : "실제값 공개";
 
       applyDatasets();
+    });
+
+    /* ------------------------------- */
+    /*  🔥 회차 통계 오버레이 토글    */
+    /* ------------------------------- */
+
+    function showRoundOverlay(round) {
+      const stats = roundStats[round];
+      if (!stats) {
+        roundOverlayEl.style.display = 'none';
+        currentRoundShown = null;
+        return;
+      }
+
+      const groupLines = Object.keys(stats.groupMeans)
+        .sort()
+        .map(g => `<li>그룹 ${g}: ${stats.groupMeans[g].toFixed(1)}</li>`)
+        .join("");
+
+      const overall = stats.overallMean.toFixed(1);
+      const closest = stats.closest;
+
+      const closestText = closest
+        ? `전체 평균에 가장 가까운 학생: <b>${closest.name}</b> (값 ${closest.value}, 그룹 ${closest.group})`
+        : `전체 평균에 가장 가까운 학생: 정보 없음`;
+
+      roundOverlayEl.innerHTML = `
+        <h2>${round}회차 통계</h2>
+        <p>그룹별 평균</p>
+        <ul>${groupLines || "<li>데이터 없음</li>"}</ul>
+        <p>전체 평균: <b>${overall}</b></p>
+        <p>${closestText}</p>
+      `;
+
+      roundOverlayEl.style.display = 'block';
+      currentRoundShown = round;
+    }
+
+    function hideRoundOverlay() {
+      roundOverlayEl.style.display = 'none';
+      currentRoundShown = null;
+    }
+
+    roundButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const round = parseInt(btn.dataset.round, 10);
+        if (currentRoundShown === round) {
+          // 같은 회차 버튼 다시 누르면 숨기기
+          hideRoundOverlay();
+          roundButtons.forEach(b => b.classList.remove('active'));
+        } else {
+          // 다른 회차 선택
+          showRoundOverlay(round);
+          roundButtons.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        }
+      });
     });
 
     /* ------------------------------- */
@@ -420,6 +503,8 @@
       await batch.commit();
 
       alert("모든 데이터가 초기화되었습니다!");
+      hideRoundOverlay();
+      roundButtons.forEach(b => b.classList.remove('active'));
     });
   </script>
 </body>
