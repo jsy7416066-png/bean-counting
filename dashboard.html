@@ -74,6 +74,7 @@
       background-color: rgba(255, 255, 255, 0.92); /* 연한 배경 */
       border-radius: 12px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      border: 2px solid #666; /* ✅ 그래프와 구분되는 테두리 */
       padding: 24px;
       display: none;
       z-index: 5;
@@ -88,15 +89,28 @@
       font-size: 1rem;
       font-weight: 600;
       margin: 6px 0;
+      color: #444;
+    }
+    #roundOverlay p.label-group {
+      margin-top: 8px;
+      margin-bottom: 4px;
     }
     #roundOverlay ul {
-      margin: 8px 0;
+      margin: 4px 0 18px 0;  /* ✅ 그룹별 평균과 전체 평균 사이 간격 넓힘 */
       padding-left: 20px;
     }
     #roundOverlay li {
       font-size: 0.95rem;
       font-weight: 600;
       margin: 2px 0;
+    }
+    /* ✅ 전체 평균 / 가장 가까운 학생 강조 */
+    #roundOverlay p.overall-line,
+    #roundOverlay p.closest-line {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #000;
+      margin-top: 6px;
     }
   </style>
 </head>
@@ -404,12 +418,12 @@
 
     /* ------------------------------- */
     /*  🔥 실제값(1616) 가로선 토글   */
-    /*     - 처음 공개 시에만 비번 1616 */
+    /*     - 처음 공개 시에만 비번 (값은 코드 안에만) */
     /* ------------------------------- */
 
     document.getElementById("toggleActualBtn").addEventListener("click", () => {
       if (!actualUnlocked) {
-        const input = prompt("실제값을 처음 공개할 때 비밀번호(1616)를 입력하세요:");
+        const input = prompt("실제값을 처음 공개하려면 비밀번호를 입력하세요:");
         if (input !== ACTUAL_PASSWORD) {
           alert("비밀번호가 올바르지 않습니다.");
           return;
@@ -450,10 +464,10 @@
 
       roundOverlayEl.innerHTML = `
         <h2>${round}회차 통계</h2>
-        <p>그룹별 평균</p>
+        <p class="label-group">그룹별 평균</p>
         <ul>${groupLines || "<li>데이터 없음</li>"}</ul>
-        <p>전체 평균: <b>${overall}</b></p>
-        <p>${closestText}</p>
+        <p class="overall-line">전체 평균: <b>${overall}</b></p>
+        <p class="closest-line">${closestText}</p>
       `;
 
       roundOverlayEl.style.display = 'block';
