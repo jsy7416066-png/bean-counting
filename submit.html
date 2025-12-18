@@ -32,20 +32,20 @@
   </style>
 </head>
 <body>
-  <h1>예측치 제출</h1>
-  <p style="font-size:0.9rem;color:#555;">
+  <h1 id="titleH1">예측치 제출</h1>
+  <p id="helpText" style="font-size:0.9rem;color:#555;">
     처음 한 번은 <b>이름/그룹번호/회차/값</b>을 입력하고,<br>
     이후에는 브라우저가 <b>이름/그룹번호</b>를 기억해서 회차와 값만 바꾸면 됩니다.
   </p>
 
   <form id="prediction-form">
-    <label for="name">이름</label>
+    <label for="name" id="labelName">이름</label>
     <input id="name" type="text" required />
 
-    <label for="group">그룹 번호 (예: 1, 2, 3...)</label>
+    <label for="group" id="labelGroup">그룹 번호 (예: 1, 2, 3...)</label>
     <input id="group" type="text" required />
 
-    <label for="round">회차</label>
+    <label for="round" id="labelRound">회차</label>
     <select id="round" required>
       <option value="1">1회차</option>
       <option value="2">2회차</option>
@@ -55,10 +55,10 @@
       <option value="6">6회차</option>
     </select>
 
-    <label for="value">예측치 (숫자)</label>
+    <label for="value" id="labelValue">예측치 (숫자)</label>
     <input id="value" type="number" step="0.01" required />
 
-    <button type="submit">제출하기</button>
+    <button type="submit" id="submitBtn">제출하기</button>
   </form>
 
   <p id="status"></p>
@@ -68,19 +68,18 @@
   <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore-compat.js"></script>
 
   <script>
-    // 🔹 1) Firebase 설정 (콘솔에서 복사한 내용으로 교체!)
     const firebaseConfig = {
       apiKey: "AIzaSyD85EPLcL_j7s-WOQ1FDimMKEYmzBFzapE",
-  authDomain: "bean-counting.firebaseapp.com",
-  projectId: "bean-counting",
-  storageBucket: "bean-counting.firebasestorage.app",
-  messagingSenderId: "700257917650",
-  appId: "1:700257917650:web:c7821b3e1b1b5f1a366b0b"
+      authDomain: "bean-counting.firebaseapp.com",
+      projectId: "bean-counting",
+      storageBucket: "bean-counting.firebasestorage.app",
+      messagingSenderId: "700257917650",
+      appId: "1:700257917650:web:c7821b3e1b1b5f1a366b0b"
     };
 
-    // 🔹 2) Firebase & Firestore 초기화
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+    const uiDocRef = db.doc('settings/ui');
 
     const form = document.getElementById('prediction-form');
     const nameInput = document.getElementById('name');
@@ -89,16 +88,90 @@
     const valueInput = document.getElementById('value');
     const statusEl = document.getElementById('status');
 
-    // 🔹 3) localStorage에서 저장된 이름/그룹 불러오기
+    const TEXT = {
+      ko: {
+        htmlLang: "ko",
+        docTitle: "예측치 제출",
+        h1: "예측치 제출",
+        helpHtml:
+          `처음 한 번은 <b>이름/그룹번호/회차/값</b>을 입력하고,<br>
+           이후에는 브라우저가 <b>이름/그룹번호</b>를 기억해서 회차와 값만 바꾸면 됩니다.`,
+        labelName: "이름",
+        labelGroup: "그룹 번호 (예: 1, 2, 3...)",
+        labelRound: "회차",
+        labelValue: "예측치 (숫자)",
+        submitBtn: "제출하기",
+        roundOption: (r) => `${r}회차`,
+        submitting: "제출 중입니다...",
+        badInput: "입력값을 다시 확인해주세요.",
+        success: (r) => `${r}회차 예측치가 성공적으로 제출되었습니다!`,
+        fail: "제출 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."
+      },
+      en: {
+        htmlLang: "en",
+        docTitle: "Submit Prediction",
+        h1: "Submit Prediction",
+        helpHtml:
+          `For your first submission, enter <b>Name / Group / Round / Value</b>.<br>
+           After that, the browser will remember your <b>Name / Group</b>, so you only need to change the round and value.`,
+        labelName: "Name",
+        labelGroup: "Group number (e.g., 1, 2, 3...)",
+        labelRound: "Round",
+        labelValue: "Prediction value (number)",
+        submitBtn: "Submit",
+        roundOption: (r) => `Round ${r}`,
+        submitting: "Submitting...",
+        badInput: "Please double-check your inputs.",
+        success: (r) => `Your prediction for Round ${r} has been submitted successfully!`,
+        fail: "An error occurred while submitting. Please try again shortly."
+      }
+    };
+
+    let currentLang = "ko";
+    function t() { return TEXT[currentLang] || TEXT.ko; }
+
+    function renderSubmitUI() {
+      const L = t();
+      document.documentElement.lang = L.htmlLang;
+      document.title = L.docTitle;
+
+      document.getElementById('titleH1').textContent = L.h1;
+      document.getElementById('helpText').innerHTML = L.helpHtml;
+
+      document.getElementById('labelName').textContent = L.labelName;
+      document.getElementById('labelGroup').textContent = L.labelGroup;
+      document.getElementById('labelRound').textContent = L.labelRound;
+      document.getElementById('labelValue').textContent = L.labelValue;
+      document.getElementById('submitBtn').textContent = L.submitBtn;
+
+      // round 옵션 텍스트
+      Array.from(roundSelect.options).forEach(opt => {
+        const r = parseInt(opt.value, 10);
+        if (!isNaN(r)) opt.textContent = L.roundOption(r);
+      });
+    }
+
+    // localStorage에서 저장된 이름/그룹 불러오기
     const savedName = localStorage.getItem('studentName');
     const savedGroup = localStorage.getItem('studentGroup');
-
     if (savedName) nameInput.value = savedName;
     if (savedGroup) groupInput.value = savedGroup;
 
+    // 전역 lang 실시간 구독
+    uiDocRef.onSnapshot(async (doc) => {
+      if (!doc.exists) {
+        try { await uiDocRef.set({ lang: "ko" }, { merge: true }); } catch (e) {}
+        return;
+      }
+      const lang = (doc.data() && doc.data().lang) ? doc.data().lang : "ko";
+      if (lang !== "ko" && lang !== "en") return;
+      currentLang = lang;
+      renderSubmitUI();
+    });
+
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      statusEl.textContent = '제출 중입니다...';
+      statusEl.textContent = t().submitting;
 
       const name = nameInput.value.trim();
       const group = groupInput.value.trim();
@@ -106,7 +179,7 @@
       const value = parseFloat(valueInput.value);
 
       if (!name || !group || isNaN(round) || isNaN(value)) {
-        statusEl.textContent = '입력값을 다시 확인해주세요.';
+        statusEl.textContent = t().badInput;
         return;
       }
 
@@ -119,15 +192,14 @@
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        // 브라우저에 이름/그룹 저장 → 다음부터 자동 입력
         localStorage.setItem('studentName', name);
         localStorage.setItem('studentGroup', group);
 
-        statusEl.textContent = `${round}회차 예측치가 성공적으로 제출되었습니다!`;
-        valueInput.value = ''; // 값만 비우기
+        statusEl.textContent = t().success(round);
+        valueInput.value = '';
       } catch (err) {
         console.error(err);
-        statusEl.textContent = '제출 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+        statusEl.textContent = t().fail;
       }
     });
   </script>
