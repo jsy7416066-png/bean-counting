@@ -21,9 +21,8 @@
       right: 10px;
       display: flex;
       align-items: flex-start;
-      gap: 8px;
+      gap: 10px;
       z-index: 10;
-      flex-wrap: nowrap;
       justify-content: flex-end;
     }
 
@@ -36,22 +35,27 @@
       cursor: pointer;
       color: #333;
       white-space: nowrap;
+      text-align: center;
     }
     .top-button:hover {
       background-color: #dcdcdc;
     }
 
-    /* 초기화 + 언어 버튼을 세로로 쌓기 */
+    /* ✅ CSV/초기화/English: 세로 스택 */
     .top-stack {
       display: flex;
       flex-direction: column;
       gap: 8px;
     }
 
-    /* 초기화/언어 버튼 크기 동일하게 */
-    .stack-button {
-      width: 120px;       /* 필요하면 숫자만 조절 */
-      text-align: center;
+    /* ✅ 실제값공개 버튼: 단독 + 더 넓게 (초기화 버튼 정도 길이) */
+    .actual-wide {
+      width: 120px;
+    }
+
+    /* ✅ 스택(3개) 버튼: CSV 정도 길이로 통일 */
+    .stack-narrow {
+      width: 110px;
     }
 
     /* 회차 버튼 영역 */
@@ -88,7 +92,7 @@
       left: 10%;
       width: 80%;
       height: 60%;
-      background-color: #ffffff; /* 완전 불투명 */
+      background-color: #ffffff;
       border-radius: 12px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
       border: 2px solid #666;
@@ -135,15 +139,14 @@
 
   <!-- 상단 우측 버튼들 -->
   <div id="top-buttons">
-    <!-- ✅ 실제값 공개: 제일 왼쪽 -->
-    <button id="toggleActualBtn" class="top-button">실제값 공개</button>
+    <!-- ✅ 실제값공개: 단독(왼쪽) + 더 넓게 -->
+    <button id="toggleActualBtn" class="top-button actual-wide">실제값 공개</button>
 
-    <button id="downloadCsvBtn" class="top-button">CSV 다운로드</button>
-
-    <!-- ✅ 초기화 위, 언어 아래(세로 스택) -->
+    <!-- ✅ CSV/초기화/English: 세로로 쌓기 + 같은 폭 -->
     <div class="top-stack">
-      <button id="resetBtn" class="top-button stack-button">초기화</button>
-      <button id="langBtn" class="top-button stack-button">English</button>
+      <button id="downloadCsvBtn" class="top-button stack-narrow">CSV 다운로드</button>
+      <button id="resetBtn" class="top-button stack-narrow">초기화</button>
+      <button id="langBtn" class="top-button stack-narrow">English</button>
     </div>
   </div>
 
@@ -279,9 +282,7 @@
       }
     };
 
-    function t() {
-      return TEXT[currentLang] || TEXT.ko;
-    }
+    function t() { return TEXT[currentLang] || TEXT.ko; }
 
     function updateDatasetLabels() {
       const L = t();
@@ -359,7 +360,6 @@
       };
 
       updateDatasetLabels();
-
       if (currentRoundShown != null) showRoundOverlay(currentRoundShown);
 
       predictionChart.update();
@@ -417,9 +417,7 @@
             min: 1,
             max: 6
           },
-          y: {
-            title: { display: true, text: '예측치' }
-          }
+          y: { title: { display: true, text: '예측치' } }
         },
         onHover: (event, activeElements, chart) => {
           if (activeElements.length > 0) {
@@ -479,17 +477,8 @@
           const group = (data.group || '기타').toString();
           if (typeof data.round === 'number' && typeof data.value === 'number') {
             if (!groupMap[group]) groupMap[group] = [];
-            groupMap[group].push({
-              x: data.round,
-              y: data.value,
-              name: data.name || ''
-            });
-            allPoints.push({
-              name: data.name || '',
-              group,
-              round: data.round,
-              value: data.value
-            });
+            groupMap[group].push({ x: data.round, y: data.value, name: data.name || '' });
+            allPoints.push({ name: data.name || '', group, round: data.round, value: data.value });
           }
         });
 
@@ -559,20 +548,13 @@
     document.getElementById("downloadCsvBtn").addEventListener("click", async () => {
       const snapshot = await db.collection("predictions").get();
       const rows = [["name","group","round","value","timestamp"]];
-
       snapshot.forEach(doc => {
         const d = doc.data();
-        const ts =
-          d.createdAt && d.createdAt.toDate
-            ? d.createdAt.toDate().toISOString()
-            : "";
+        const ts = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toISOString() : "";
         rows.push([d.name ?? "", d.group ?? "", d.round ?? "", d.value ?? "", ts]);
       });
 
-      const csvContent =
-        "data:text/csv;charset=utf-8,\ufeff" +
-        rows.map(e => e.join(",")).join("\n");
-
+      const csvContent = "data:text/csv;charset=utf-8,\ufeff" + rows.map(e => e.join(",")).join("\n");
       const link = document.createElement("a");
       link.href = encodeURI(csvContent);
       link.download = "predictions_backup_" + new Date().toISOString().slice(0, 10) + ".csv";
@@ -600,7 +582,7 @@
 
     document.getElementById("langBtn").addEventListener("click", async () => {
       const L = t();
-      const input = prompt(L.resetPrompt); // 언어 전환도 RESET 비번으로 동일하게
+      const input = prompt(L.resetPrompt);
       if (input !== RESET_PASSWORD) {
         alert(L.badPassword);
         return;
@@ -647,7 +629,6 @@
 
       const snapshot = await db.collection("predictions").get();
       const batch = db.batch();
-
       snapshot.forEach(doc => batch.delete(doc.ref));
       await batch.commit();
 
