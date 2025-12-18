@@ -225,6 +225,7 @@
         downloadCsv: "CSV 다운로드",
         reset: "초기화",
         resetPrompt: "초기화 비밀번호를 입력하세요:",
+        langPrompt: "언어를 변경하려면 비밀번호를 입력하세요:",
         resetConfirm: "⚠ 정말 모든 데이터를 삭제할까요?",
         resetDone: "모든 데이터가 초기화되었습니다!",
         badPassword: "비밀번호가 올바르지 않습니다.",
@@ -260,6 +261,7 @@
         downloadCsv: "Download CSV",
         reset: "Reset",
         resetPrompt: "Enter the reset password:",
+        langPrompt: "Enter the password to change the language:",
         resetConfirm: "⚠ Are you sure you want to delete ALL data?",
         resetDone: "All data has been reset!",
         badPassword: "Incorrect password.",
@@ -582,7 +584,7 @@
 
     document.getElementById("langBtn").addEventListener("click", async () => {
       const L = t();
-      const input = prompt(L.resetPrompt);
+      const input = prompt(L.langPrompt);
       if (input !== RESET_PASSWORD) {
         alert(L.badPassword);
         return;
@@ -639,3 +641,4 @@
   </script>
 </body>
 </html>
+
