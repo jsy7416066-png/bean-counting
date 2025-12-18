@@ -20,14 +20,15 @@
       top: 10px;
       right: 10px;
       display: flex;
+      align-items: flex-start;
       gap: 8px;
       z-index: 10;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       justify-content: flex-end;
     }
 
     .top-button {
-      background-color: #e5e5e5; /* 연한 회색 */
+      background-color: #e5e5e5;
       border: 1px solid #ccc;
       padding: 6px 10px;
       font-size: 0.8rem;
@@ -38,6 +39,19 @@
     }
     .top-button:hover {
       background-color: #dcdcdc;
+    }
+
+    /* 초기화 + 언어 버튼을 세로로 쌓기 */
+    .top-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* 초기화/언어 버튼 크기 동일하게 */
+    .stack-button {
+      width: 120px;       /* 필요하면 숫자만 조절 */
+      text-align: center;
     }
 
     /* 회차 버튼 영역 */
@@ -74,10 +88,10 @@
       left: 10%;
       width: 80%;
       height: 60%;
-      background-color: #ffffff; /* 완전 불투명 흰색 배경 */
+      background-color: #ffffff; /* 완전 불투명 */
       border-radius: 12px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      border: 2px solid #666; /* 그래프와 구분되는 테두리 */
+      border: 2px solid #666;
       padding: 24px;
       display: none;
       z-index: 5;
@@ -108,7 +122,6 @@
       font-weight: 600;
       margin: 2px 0;
     }
-    /* 전체 평균 / 가장 가까운 학생 강조 */
     #roundOverlay p.overall-line,
     #roundOverlay p.closest-line {
       font-size: 1.05rem;
@@ -122,10 +135,16 @@
 
   <!-- 상단 우측 버튼들 -->
   <div id="top-buttons">
-    <button id="langBtn" class="top-button">언어: 한국어</button>
+    <!-- ✅ 실제값 공개: 제일 왼쪽 -->
     <button id="toggleActualBtn" class="top-button">실제값 공개</button>
+
     <button id="downloadCsvBtn" class="top-button">CSV 다운로드</button>
-    <button id="resetBtn" class="top-button">초기화</button>
+
+    <!-- ✅ 초기화 위, 언어 아래(세로 스택) -->
+    <div class="top-stack">
+      <button id="resetBtn" class="top-button stack-button">초기화</button>
+      <button id="langBtn" class="top-button stack-button">English</button>
+    </div>
   </div>
 
   <h1 id="pageTitle">예측치 산점도 (실시간)</h1>
@@ -157,7 +176,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
-    /* Firebase Config */
     const firebaseConfig = {
       apiKey: "AIzaSyD85EPLcL_j7s-WOQ1FDimMKEYmzBFzapE",
       authDomain: "bean-counting.firebaseapp.com",
@@ -169,6 +187,7 @@
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+    const uiDocRef = db.doc('settings/ui');
 
     const ctx = document.getElementById('predictionChart').getContext('2d');
     const roundOverlayEl = document.getElementById('roundOverlay');
@@ -178,21 +197,15 @@
     const RESET_PASSWORD  = "SNU-TA-Reset-9237!";
     const ACTUAL_PASSWORD = "1616";
 
-    const uiDocRef = db.doc('settings/ui');
-
-    // 상태 변수들
-    let baseDatasets = [];        // 그룹별 점들만
-    let highlightDataset = null;  // 개별 학생 추세선
-    let actualVisible   = false;  // 실제값 선 표시 여부
-    let actualUnlocked  = false;  // 실제값 비번 통과 여부
-    let allPoints = [];           // {name, group, round, value}
-    let roundStats = {};          // 회차별 통계
-    let currentRoundShown = null; // 현재 오버레이로 표시 중인 회차
+    let baseDatasets = [];
+    let highlightDataset = null;
+    let actualVisible   = false;
+    let actualUnlocked  = false;
+    let allPoints = [];
+    let roundStats = {};
+    let currentRoundShown = null;
     let currentLang = 'ko';
 
-    /* ------------------------------- */
-    /*  i18n 텍스트                     */
-    /* ------------------------------- */
     const TEXT = {
       ko: {
         htmlLang: "ko",
@@ -203,9 +216,6 @@
            색깔: <b>그룹 번호</b>별로 구분되어 표시됩니다.<br/>
            점에 마우스를 올리면 <b>학생 이름 & 그 학생의 전체 추세선</b>이 보입니다.<br/>
            아래 회차 버튼을 눌러 해당 회차의 <b>그룹별 평균 / 전체 평균 / 평균에 가장 가까운 학생</b>을 확인할 수 있습니다.`,
-        langBtn: "언어: 한국어",
-        langChangePrompt: "언어를 변경하려면 비밀번호를 입력하세요:",
-        badPassword: "비밀번호가 올바르지 않습니다.",
         showActual: "실제값 공개",
         hideActual: "실제값 숨기기",
         actualPrompt: "실제값을 처음 공개하려면 비밀번호를 입력하세요:",
@@ -214,6 +224,7 @@
         resetPrompt: "초기화 비밀번호를 입력하세요:",
         resetConfirm: "⚠ 정말 모든 데이터를 삭제할까요?",
         resetDone: "모든 데이터가 초기화되었습니다!",
+        badPassword: "비밀번호가 올바르지 않습니다.",
         tooltipUnknown: "이름 미상",
         tooltipLabel: (name, round, value) => `${name} - ${round}회차: ${value}`,
         xTitle: "회차",
@@ -240,9 +251,6 @@
            Colors indicate <b>group numbers</b>.<br/>
            Hover over a point to see the <b>student name & their overall trend line</b>.<br/>
            Use the round buttons below to view <b>group means / overall mean / the student closest to the mean</b>.`,
-        langBtn: "Language: English",
-        langChangePrompt: "Enter the password to change the language:",
-        badPassword: "Incorrect password.",
         showActual: "Show actual value",
         hideActual: "Hide actual value",
         actualPrompt: "Enter the password to reveal the actual value for the first time:",
@@ -251,6 +259,7 @@
         resetPrompt: "Enter the reset password:",
         resetConfirm: "⚠ Are you sure you want to delete ALL data?",
         resetDone: "All data has been reset!",
+        badPassword: "Incorrect password.",
         tooltipUnknown: "Unknown",
         tooltipLabel: (name, round, value) => `${name} - Round ${round}: ${value}`,
         xTitle: "Round",
@@ -274,6 +283,46 @@
       return TEXT[currentLang] || TEXT.ko;
     }
 
+    function updateDatasetLabels() {
+      const L = t();
+      baseDatasets.forEach(ds => {
+        if (ds && ds._groupName != null) ds.label = L.groupLabel(ds._groupName);
+      });
+      if (highlightDataset && highlightDataset._name) {
+        highlightDataset.label = L.trendLabel(highlightDataset._name);
+      }
+    }
+
+    function showRoundOverlay(round) {
+      const stats = roundStats[round];
+      if (!stats) {
+        roundOverlayEl.style.display = 'none';
+        currentRoundShown = null;
+        return;
+      }
+
+      const L = t();
+
+      const groupLines = Object.keys(stats.groupMeans)
+        .sort()
+        .map(g => `<li>${L.groupLabel(g)}: ${stats.groupMeans[g].toFixed(1)}</li>`)
+        .join("");
+
+      const overall = stats.overallMean.toFixed(1);
+      const closest = stats.closest;
+
+      roundOverlayEl.innerHTML = `
+        <h2>${L.overlayTitle(round)}</h2>
+        <p class="label-group">${L.overlayGroupMeans}</p>
+        <ul>${groupLines || `<li>${L.overlayNoData}</li>`}</ul>
+        <p class="overall-line">${L.overlayOverall(overall)}</p>
+        <p class="closest-line">${L.overlayClosest(closest)}</p>
+      `;
+
+      roundOverlayEl.style.display = 'block';
+      currentRoundShown = round;
+    }
+
     function applyLanguageToStaticUI() {
       const L = t();
 
@@ -283,21 +332,20 @@
       document.getElementById('pageTitle').textContent = L.pageTitle;
       document.getElementById('pageDesc').innerHTML = L.pageDescHtml;
 
-      document.getElementById('langBtn').textContent = L.langBtn;
+      // ✅ 언어 버튼: 한 단어만 (현재 언어의 반대)
+      document.getElementById('langBtn').textContent = (currentLang === "ko") ? "English" : "한국어";
+
       document.getElementById('downloadCsvBtn').textContent = L.downloadCsv;
       document.getElementById('resetBtn').textContent = L.reset;
 
-      // 실제값 버튼은 상태에 따라
       document.getElementById("toggleActualBtn").textContent =
         actualVisible ? L.hideActual : L.showActual;
 
-      // 회차 버튼 텍스트
       roundButtons.forEach(btn => {
         const r = parseInt(btn.dataset.round, 10);
         btn.textContent = L.roundBtn(r);
       });
 
-      // 차트 축/틱/툴팁 텍스트 반영
       predictionChart.options.scales.x.title.text = L.xTitle;
       predictionChart.options.scales.y.title.text = L.yTitle;
       predictionChart.options.scales.x.ticks.callback = (v) => L.xTick(v);
@@ -310,39 +358,16 @@
         return L.tooltipLabel(name, round, value);
       };
 
-      // 데이터셋 라벨도 언어에 맞춰 갱신
       updateDatasetLabels();
 
-      // 오버레이가 떠 있으면 해당 언어로 다시 렌더
-      if (currentRoundShown != null) {
-        showRoundOverlay(currentRoundShown);
-      }
+      if (currentRoundShown != null) showRoundOverlay(currentRoundShown);
 
       predictionChart.update();
     }
 
-    function updateDatasetLabels() {
-      const L = t();
-
-      // baseDatasets: 그룹 라벨
-      baseDatasets.forEach(ds => {
-        if (ds && ds._groupName != null) {
-          ds.label = L.groupLabel(ds._groupName);
-        }
-      });
-
-      // highlightDataset: 추세 라벨
-      if (highlightDataset && highlightDataset._name) {
-        highlightDataset.label = L.trendLabel(highlightDataset._name);
-      }
-    }
-
-    /* 🔹 실제값(1616) 가로선 데이터셋 */
     function makeActualDataset() {
       const lineData = [];
-      for (let r = 1; r <= 6; r++) {
-        lineData.push({ x: r, y: ACTUAL_VALUE });
-      }
+      for (let r = 1; r <= 6; r++) lineData.push({ x: r, y: ACTUAL_VALUE });
       return {
         type: 'line',
         label: 'Actual',
@@ -355,23 +380,14 @@
       };
     }
 
-    /* 🔹 현재 상태에 맞게 데이터셋 적용 */
     function applyDatasets() {
       const datasets = [...baseDatasets];
-
-      if (actualVisible) {
-        datasets.push(makeActualDataset());
-      }
-
-      if (highlightDataset) {
-        datasets.push(highlightDataset);
-      }
-
+      if (actualVisible) datasets.push(makeActualDataset());
+      if (highlightDataset) datasets.push(highlightDataset);
       predictionChart.data.datasets = datasets;
       predictionChart.update();
     }
 
-    /* 🔹 차트 초기화 (애니메이션 끔) */
     const predictionChart = new Chart(ctx, {
       type: 'scatter',
       data: { datasets: [] },
@@ -447,13 +463,11 @@
       }
     });
 
-    /* 🔹 그룹별 색상 */
     const groupColors = [
       '#e41a1c', '#377eb8', '#4daf4a', '#984ea3',
       '#ff7f00', '#a65628', '#f781bf', '#999999'
     ];
 
-    /* 🔹 Firestore 실시간 리스너: 예측 데이터 */
     db.collection('predictions')
       .orderBy('round', 'asc')
       .onSnapshot((snapshot) => {
@@ -479,7 +493,6 @@
           }
         });
 
-        // 기본 데이터셋
         const groupNames = Object.keys(groupMap).sort();
         baseDatasets = groupNames.map((groupName, idx) => ({
           label: t().groupLabel(groupName),
@@ -489,7 +502,6 @@
           _groupName: groupName
         }));
 
-        // 회차별 통계 계산
         roundStats = {};
         const roundGroupValues = {};
         const roundAllValues   = {};
@@ -532,13 +544,9 @@
         applyDatasets();
       });
 
-    /* 🔹 Firestore 실시간 리스너: 전역 UI 설정(lang) */
     uiDocRef.onSnapshot(async (doc) => {
-      // 문서 없으면 기본값 생성(운영상 안전하게 ko)
       if (!doc.exists) {
-        try {
-          await uiDocRef.set({ lang: "ko" }, { merge: true });
-        } catch (e) {}
+        try { await uiDocRef.set({ lang: "ko" }, { merge: true }); } catch (e) {}
         return;
       }
       const lang = (doc.data() && doc.data().lang) ? doc.data().lang : "ko";
@@ -548,9 +556,6 @@
       applyLanguageToStaticUI();
     });
 
-    /* ------------------------------- */
-    /*  CSV 다운로드 (BOM 포함)        */
-    /* ------------------------------- */
     document.getElementById("downloadCsvBtn").addEventListener("click", async () => {
       const snapshot = await db.collection("predictions").get();
       const rows = [["name","group","round","value","timestamp"]];
@@ -561,13 +566,7 @@
           d.createdAt && d.createdAt.toDate
             ? d.createdAt.toDate().toISOString()
             : "";
-        rows.push([
-          d.name ?? "",
-          d.group ?? "",
-          d.round ?? "",
-          d.value ?? "",
-          ts
-        ]);
+        rows.push([d.name ?? "", d.group ?? "", d.round ?? "", d.value ?? "", ts]);
       });
 
       const csvContent =
@@ -576,14 +575,10 @@
 
       const link = document.createElement("a");
       link.href = encodeURI(csvContent);
-      link.download =
-        "predictions_backup_" + new Date().toISOString().slice(0, 10) + ".csv";
+      link.download = "predictions_backup_" + new Date().toISOString().slice(0, 10) + ".csv";
       link.click();
     });
 
-    /* ------------------------------- */
-    /*  실제값(1616) 가로선 토글        */
-    /* ------------------------------- */
     document.getElementById("toggleActualBtn").addEventListener("click", () => {
       const L = t();
 
@@ -603,12 +598,9 @@
       applyDatasets();
     });
 
-    /* ------------------------------- */
-    /*  언어 전환 토글 (RESET 비번)     */
-    /* ------------------------------- */
     document.getElementById("langBtn").addEventListener("click", async () => {
       const L = t();
-      const input = prompt(L.langChangePrompt);
+      const input = prompt(L.resetPrompt); // 언어 전환도 RESET 비번으로 동일하게
       if (input !== RESET_PASSWORD) {
         alert(L.badPassword);
         return;
@@ -618,43 +610,9 @@
       try {
         await uiDocRef.set({ lang: nextLang }, { merge: true });
       } catch (e) {
-        // 권한/네트워크 문제 등
         alert("Failed to change language. (Firestore write blocked)");
       }
     });
-
-    /* ------------------------------- */
-    /*  회차 통계 오버레이 토글        */
-    /* ------------------------------- */
-    function showRoundOverlay(round) {
-      const stats = roundStats[round];
-      if (!stats) {
-        roundOverlayEl.style.display = 'none';
-        currentRoundShown = null;
-        return;
-      }
-
-      const L = t();
-
-      const groupLines = Object.keys(stats.groupMeans)
-        .sort()
-        .map(g => `<li>${L.groupLabel(g)}: ${stats.groupMeans[g].toFixed(1)}</li>`)
-        .join("");
-
-      const overall = stats.overallMean.toFixed(1);
-      const closest = stats.closest;
-
-      roundOverlayEl.innerHTML = `
-        <h2>${L.overlayTitle(round)}</h2>
-        <p class="label-group">${L.overlayGroupMeans}</p>
-        <ul>${groupLines || `<li>${L.overlayNoData}</li>`}</ul>
-        <p class="overall-line">${L.overlayOverall(overall)}</p>
-        <p class="closest-line">${L.overlayClosest(closest)}</p>
-      `;
-
-      roundOverlayEl.style.display = 'block';
-      currentRoundShown = round;
-    }
 
     function hideRoundOverlay() {
       roundOverlayEl.style.display = 'none';
@@ -675,9 +633,6 @@
       });
     });
 
-    /* ------------------------------- */
-    /*  초기화 기능 (비밀번호 필요)     */
-    /* ------------------------------- */
     document.getElementById("resetBtn").addEventListener("click", async () => {
       const L = t();
       const input = prompt(L.resetPrompt);
