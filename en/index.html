@@ -1,1 +1,527 @@
-!-- English version -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>예측치 대시보드</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    p { font-size: 0.9rem; margin-top: 0; color: #555; }
+
+    /* 우상단 버튼 컨테이너 */
+    #top-buttons {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .top-button {
+      background-color: #e5e5e5; /* 연한 회색 */
+      border: 1px solid #ccc;
+      padding: 6px 10px;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #333;
+    }
+    .top-button:hover {
+      background-color: #dcdcdc;
+    }
+
+    /* 회차 버튼 영역 */
+    #round-buttons {
+      margin-top: 8px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .round-button {
+      background-color: #f0f0f0;
+      border: 1px solid #ccc;
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .round-button.active {
+      background-color: #ddd;
+      font-weight: 600;
+    }
+
+    #chart-container {
+      position: relative;
+      height: 70vh;
+      max-height: 600px;
+      margin-top: 16px;
+    }
+
+    /* 회차 통계 오버레이 */
+    #roundOverlay {
+      position: absolute;
+      top: 10%;
+      left: 10%;
+      width: 80%;
+      height: 60%;
+      background-color: #ffffff; /* 완전 불투명 흰색 배경 */
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      border: 2px solid #666; /* ✅ 그래프와 구분되는 테두리 */
+      padding: 24px;
+      display: none;
+      z-index: 5;
+      box-sizing: border-box;
+    }
+    #roundOverlay h2 {
+      margin-top: 0;
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+    #roundOverlay p {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 6px 0;
+      color: #444;
+    }
+    #roundOverlay p.label-group {
+      margin-top: 8px;
+      margin-bottom: 4px;
+    }
+    #roundOverlay ul {
+      margin: 4px 0 18px 0;  /* ✅ 그룹별 평균과 전체 평균 사이 간격 넓힘 */
+      padding-left: 20px;
+    }
+    #roundOverlay li {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin: 2px 0;
+    }
+    /* ✅ 전체 평균 / 가장 가까운 학생 강조 */
+    #roundOverlay p.overall-line,
+    #roundOverlay p.closest-line {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #000;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 상단 우측 버튼들 (실제값 공개를 가장 왼쪽에) -->
+  <div id="top-buttons">
+    <button id="toggleActualBtn" class="top-button">실제값 공개</button>
+    <button id="downloadCsvBtn" class="top-button">CSV 다운로드</button>
+    <button id="resetBtn" class="top-button">초기화</button>
+  </div>
+
+  <h1>예측치 산점도 (실시간)</h1>
+  <p>
+    X축: 회차(1~6), Y축: 예측치<br/>
+    색깔: <b>그룹 번호</b>별로 구분되어 표시됩니다.<br/>
+    점에 마우스를 올리면 <b>학생 이름 & 그 학생의 전체 추세선</b>이 보입니다.<br/>
+    아래 회차 버튼을 눌러 해당 회차의 <b>그룹별 평균 / 전체 평균 / 평균에 가장 가까운 학생</b>을 확인할 수 있습니다.
+  </p>
+
+  <!-- 회차 버튼들 -->
+  <div id="round-buttons">
+    <button class="round-button" data-round="1">1회차</button>
+    <button class="round-button" data-round="2">2회차</button>
+    <button class="round-button" data-round="3">3회차</button>
+    <button class="round-button" data-round="4">4회차</button>
+    <button class="round-button" data-round="5">5회차</button>
+    <button class="round-button" data-round="6">6회차</button>
+  </div>
+
+  <div id="chart-container">
+    <canvas id="predictionChart"></canvas>
+
+    <!-- 회차 통계 오버레이 -->
+    <div id="roundOverlay"></div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+    /* 🔹 Firebase Config (bean-counting 프로젝트) */
+    const firebaseConfig = {
+      apiKey: "AIzaSyD85EPLcL_j7s-WOQ1FDimMKEYmzBFzapE",
+      authDomain: "bean-counting.firebaseapp.com",
+      projectId: "bean-counting",
+      storageBucket: "bean-counting.firebasestorage.app",
+      messagingSenderId: "700257917650",
+      appId: "1:700257917650:web:c7821b3e1b1b5f1a366b0b"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const ctx = document.getElementById('predictionChart').getContext('2d');
+    const roundOverlayEl = document.getElementById('roundOverlay');
+    const roundButtons = document.querySelectorAll('.round-button');
+
+    const ACTUAL_VALUE = 1616;
+    const RESET_PASSWORD  = "SNU-TA-Reset-9237!";
+    const ACTUAL_PASSWORD = "1616";
+
+    // 상태 변수들
+    let baseDatasets = [];        // 그룹별 점들만
+    let highlightDataset = null;  // 개별 학생 추세선
+    let actualVisible   = false;  // 실제값 선 표시 여부
+    let actualUnlocked  = false;  // 실제값 비번 통과 여부
+    let allPoints = [];           // {name, group, round, value}
+    let roundStats = {};          // 회차별 통계
+    let currentRoundShown = null; // 현재 오버레이로 표시 중인 회차
+
+    /* 🔹 실제값(1616) 가로선 데이터셋 */
+    function makeActualDataset() {
+      const lineData = [];
+      for (let r = 1; r <= 6; r++) {
+        lineData.push({ x: r, y: ACTUAL_VALUE });
+      }
+      return {
+        type: 'line',
+        label: `Actual`,
+        data: lineData,
+        borderColor: 'red',
+        borderWidth: 4,   // 조금 더 굵게
+        pointRadius: 0,
+        fill: false
+      };
+    }
+
+    /* 🔹 현재 상태에 맞게 데이터셋 적용 */
+    function applyDatasets() {
+      const datasets = [...baseDatasets];
+
+      if (actualVisible) {
+        datasets.push(makeActualDataset());
+      }
+
+      if (highlightDataset) {
+        datasets.push(highlightDataset);
+      }
+
+      predictionChart.data.datasets = datasets;
+      predictionChart.update();
+    }
+
+    /* 🔹 차트 초기화 (애니메이션 끔) */
+    const predictionChart = new Chart(ctx, {
+      type: 'scatter',
+      data: { datasets: [] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,   // 전체 애니메이션 비활성화
+        plugins: {
+          legend: { display: true },
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const p = context.raw; // {x, y, name}
+                const name = p.name || '이름 미상';
+                const round = context.parsed.x;
+                const value = context.parsed.y;
+                return `${name} - ${round}회차: ${value}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'linear',
+            position: 'bottom',
+            title: { display: true, text: '회차' },
+            ticks: { stepSize: 1, callback: v => `${v}회차` },
+            min: 1,
+            max: 6
+          },
+          y: {
+            title: { display: true, text: '예측치' }
+          }
+        },
+        // 포인트 위/밖 hover 시: 학생 추세선만 처리
+        onHover: (event, activeElements, chart) => {
+          if (activeElements.length > 0) {
+            const first = activeElements[0];
+            const dsIndex = first.datasetIndex;
+            const index = first.index;
+            const ds = chart.data.datasets[dsIndex];
+            const point = ds.data[index];
+
+            const name = point.name;
+            if (name) {
+              const personPoints = allPoints
+                .filter(p => p.name === name)
+                .sort((a, b) => a.round - b.round)
+                .map(p => ({ x: p.round, y: p.value }));
+
+              if (personPoints.length > 1) {
+                highlightDataset = {
+                  type: 'line',
+                  label: `${name} 추세`,
+                  data: personPoints,
+                  borderColor: 'rgba(0,0,0,0.6)',
+                  borderWidth: 2,
+                  pointRadius: 0,
+                  fill: false,
+                  borderDash: [4, 3]
+                };
+              } else {
+                highlightDataset = null;
+              }
+              applyDatasets();
+            }
+          } else {
+            if (highlightDataset) {
+              highlightDataset = null;
+              applyDatasets();
+            }
+          }
+        }
+      }
+    });
+
+    /* 🔹 그룹별 색상 */
+    const groupColors = [
+      '#e41a1c', '#377eb8', '#4daf4a', '#984ea3',
+      '#ff7f00', '#a65628', '#f781bf', '#999999'
+    ];
+
+    /* 🔹 Firestore 실시간 리스너 */
+    db.collection('predictions')
+      .orderBy('round', 'asc')
+      .onSnapshot((snapshot) => {
+        const groupMap = {};
+        allPoints = [];
+
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const group = (data.group || '기타').toString();
+          if (typeof data.round === 'number' && typeof data.value === 'number') {
+            if (!groupMap[group]) groupMap[group] = [];
+            groupMap[group].push({
+              x: data.round,
+              y: data.value,
+              name: data.name || ''
+            });
+            allPoints.push({
+              name: data.name || '',
+              group,
+              round: data.round,
+              value: data.value
+            });
+          }
+        });
+
+        // 기본 데이터셋
+        const groupNames = Object.keys(groupMap).sort();
+        baseDatasets = groupNames.map((groupName, idx) => ({
+          label: `그룹 ${groupName}`,
+          data: groupMap[groupName],
+          pointRadius: 4,
+          backgroundColor: groupColors[idx % groupColors.length]
+        }));
+
+        // 회차별 통계 계산
+        roundStats = {};
+        const roundGroupValues = {};
+        const roundAllValues   = {};
+
+        allPoints.forEach(p => {
+          if (!roundGroupValues[p.round]) roundGroupValues[p.round] = {};
+          if (!roundGroupValues[p.round][p.group]) roundGroupValues[p.round][p.group] = [];
+          roundGroupValues[p.round][p.group].push(p.value);
+
+          if (!roundAllValues[p.round]) roundAllValues[p.round] = [];
+          roundAllValues[p.round].push({ name: p.name, group: p.group, value: p.value });
+        });
+
+        for (let r = 1; r <= 6; r++) {
+          if (!roundAllValues[r]) continue;
+
+          const groupMeans = {};
+          Object.keys(roundGroupValues[r] || {}).forEach(g => {
+            const arr = roundGroupValues[r][g];
+            const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+            groupMeans[g] = mean;
+          });
+
+          const allArr = roundAllValues[r];
+          const overallMean = allArr.reduce((a, p) => a + p.value, 0) / allArr.length;
+
+          let closest = null;
+          let bestDiff = Infinity;
+          allArr.forEach(p => {
+            const diff = Math.abs(p.value - overallMean);
+            if (diff < bestDiff) {
+              bestDiff = diff;
+              closest = p;
+            }
+          });
+
+          roundStats[r] = {
+            groupMeans,
+            overallMean,
+            closest
+          };
+        }
+
+        applyDatasets();
+      });
+
+    /* ------------------------------- */
+    /*  🔥 CSV 다운로드 (BOM 포함)    */
+    /* ------------------------------- */
+
+    document.getElementById("downloadCsvBtn").addEventListener("click", async () => {
+      const snapshot = await db.collection("predictions").get();
+      const rows = [["name","group","round","value","timestamp"]];
+
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        const ts =
+          d.createdAt && d.createdAt.toDate
+            ? d.createdAt.toDate().toISOString()
+            : "";
+        rows.push([
+          d.name ?? "",
+          d.group ?? "",
+          d.round ?? "",
+          d.value ?? "",
+          ts
+        ]);
+      });
+
+      const csvContent =
+        "data:text/csv;charset=utf-8,\ufeff" +
+        rows.map(e => e.join(",")).join("\n");
+
+      const link = document.createElement("a");
+      link.href = encodeURI(csvContent);
+      link.download =
+        "predictions_backup_" + new Date().toISOString().slice(0, 10) + ".csv";
+      link.click();
+    });
+
+    /* ------------------------------- */
+    /*  🔥 실제값(1616) 가로선 토글   */
+    /*     - 처음 공개 시에만 비번 (값은 코드 안에만) */
+    /* ------------------------------- */
+
+    document.getElementById("toggleActualBtn").addEventListener("click", () => {
+      if (!actualUnlocked) {
+        const input = prompt("실제값을 처음 공개하려면 비밀번호를 입력하세요:");
+        if (input !== ACTUAL_PASSWORD) {
+          alert("비밀번호가 올바르지 않습니다.");
+          return;
+        }
+        actualUnlocked = true;
+      }
+
+      actualVisible = !actualVisible;
+      document.getElementById("toggleActualBtn").textContent =
+        actualVisible ? "실제값 숨기기" : "실제값 공개";
+
+      applyDatasets();
+    });
+
+    /* ------------------------------- */
+    /*  🔥 회차 통계 오버레이 토글    */
+    /* ------------------------------- */
+
+    function showRoundOverlay(round) {
+      const stats = roundStats[round];
+      if (!stats) {
+        roundOverlayEl.style.display = 'none';
+        currentRoundShown = null;
+        return;
+      }
+
+      const groupLines = Object.keys(stats.groupMeans)
+        .sort()
+        .map(g => `<li>그룹 ${g}: ${stats.groupMeans[g].toFixed(1)}</li>`)
+        .join("");
+
+      const overall = stats.overallMean.toFixed(1);
+      const closest = stats.closest;
+
+      const closestText = closest
+        ? `전체 평균에 가장 가까운 학생: <b>${closest.name}</b> (값 ${closest.value}, 그룹 ${closest.group})`
+        : `전체 평균에 가장 가까운 학생: 정보 없음`;
+
+      roundOverlayEl.innerHTML = `
+        <h2>${round}회차 통계</h2>
+        <p class="label-group">그룹별 평균</p>
+        <ul>${groupLines || "<li>데이터 없음</li>"}</ul>
+        <p class="overall-line">전체 평균: <b>${overall}</b></p>
+        <p class="closest-line">${closestText}</p>
+      `;
+
+      roundOverlayEl.style.display = 'block';
+      currentRoundShown = round;
+    }
+
+    function hideRoundOverlay() {
+      roundOverlayEl.style.display = 'none';
+      currentRoundShown = null;
+    }
+
+    roundButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const round = parseInt(btn.dataset.round, 10);
+        if (currentRoundShown === round) {
+          // 같은 회차 버튼 다시 누르면 숨기기
+          hideRoundOverlay();
+          roundButtons.forEach(b => b.classList.remove('active'));
+        } else {
+          // 다른 회차 선택
+          showRoundOverlay(round);
+          roundButtons.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        }
+      });
+    });
+
+    /* ------------------------------- */
+    /*  🔥 초기화 기능 (비밀번호 필요) */
+    /* ------------------------------- */
+
+    document.getElementById("resetBtn").addEventListener("click", async () => {
+      const input = prompt("초기화 비밀번호를 입력하세요:");
+
+      if (input !== RESET_PASSWORD) {
+        alert("비밀번호가 올바르지 않습니다.");
+        return;
+      }
+
+      const really = confirm("⚠ 정말 모든 데이터를 삭제할까요?");
+      if (!really) return;
+
+      const snapshot = await db.collection("predictions").get();
+      const batch = db.batch();
+
+      snapshot.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+
+      alert("모든 데이터가 초기화되었습니다!");
+      hideRoundOverlay();
+      roundButtons.forEach(b => b.classList.remove('active'));
+    });
+  </script>
+</body>
+</html>
+
+
