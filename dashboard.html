@@ -563,33 +563,21 @@
       link.click();
     });
 
+    // ✅ 실제값 공개: 비밀번호 없이 동작하도록 수정
     document.getElementById("toggleActualBtn").addEventListener("click", () => {
       const L = t();
 
-      if (!actualUnlocked) {
-        const input = prompt(L.actualPrompt);
-        if (input !== ACTUAL_PASSWORD) {
-          alert(L.badPassword);
-          return;
-        }
-        actualUnlocked = true;
-      }
-
+      actualUnlocked = true; // (원래 잠금 로직이 있어 남겨둠 - 의미상 unlock 처리)
       actualVisible = !actualVisible;
+
       document.getElementById("toggleActualBtn").textContent =
         actualVisible ? L.hideActual : L.showActual;
 
       applyDatasets();
     });
 
+    // ✅ 언어 변경(English): 비밀번호 없이 동작하도록 수정
     document.getElementById("langBtn").addEventListener("click", async () => {
-      const L = t();
-      const input = prompt(L.langPrompt);
-      if (input !== RESET_PASSWORD) {
-        alert(L.badPassword);
-        return;
-      }
-
       const nextLang = (currentLang === "ko") ? "en" : "ko";
       try {
         await uiDocRef.set({ lang: nextLang }, { merge: true });
@@ -617,6 +605,7 @@
       });
     });
 
+    // ✅ 초기화: 비밀번호 유지(그대로)
     document.getElementById("resetBtn").addEventListener("click", async () => {
       const L = t();
       const input = prompt(L.resetPrompt);
@@ -641,4 +630,3 @@
   </script>
 </body>
 </html>
-
