@@ -41,19 +41,19 @@
       background-color: #dcdcdc;
     }
 
-    /* ✅ CSV/초기화/English: 세로 스택 */
+    /* CSV/초기화/English: 세로 스택 */
     .top-stack {
       display: flex;
       flex-direction: column;
       gap: 8px;
     }
 
-    /* ✅ 실제값공개 버튼: 단독 + 더 넓게 (초기화 버튼 정도 길이) */
+    /* 실제값공개 버튼: 단독 + 더 넓게 */
     .actual-wide {
       width: 120px;
     }
 
-    /* ✅ 스택(3개) 버튼: CSV 정도 길이로 통일 */
+    /* 스택(3개) 버튼: CSV 정도 길이로 통일 */
     .stack-narrow {
       width: 110px;
     }
@@ -74,6 +74,26 @@
       cursor: pointer;
     }
     .round-button.active {
+      background-color: #ddd;
+      font-weight: 600;
+    }
+
+    /* 그룹 버튼 영역 */
+    #group-buttons {
+      margin-top: 8px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .group-button {
+      background-color: #f0f0f0;
+      border: 1px solid #ccc;
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .group-button.active {
       background-color: #ddd;
       font-weight: 600;
     }
@@ -139,10 +159,10 @@
 
   <!-- 상단 우측 버튼들 -->
   <div id="top-buttons">
-    <!-- ✅ 실제값공개: 단독(왼쪽) + 더 넓게 -->
+    <!-- 실제값공개: 단독(왼쪽) + 더 넓게 -->
     <button id="toggleActualBtn" class="top-button actual-wide">실제값 공개</button>
 
-    <!-- ✅ CSV/초기화/English: 세로로 쌓기 + 같은 폭 -->
+    <!-- CSV/초기화/English: 세로로 쌓기 + 같은 폭 -->
     <div class="top-stack">
       <button id="downloadCsvBtn" class="top-button stack-narrow">CSV 다운로드</button>
       <button id="resetBtn" class="top-button stack-narrow">초기화</button>
@@ -166,6 +186,18 @@
     <button class="round-button" data-round="4">4회차</button>
     <button class="round-button" data-round="5">5회차</button>
     <button class="round-button" data-round="6">6회차</button>
+  </div>
+
+  <!-- 그룹 버튼들 -->
+  <div id="group-buttons">
+    <button class="group-button" data-group="1">그룹 1</button>
+    <button class="group-button" data-group="2">그룹 2</button>
+    <button class="group-button" data-group="3">그룹 3</button>
+    <button class="group-button" data-group="4">그룹 4</button>
+    <button class="group-button" data-group="5">그룹 5</button>
+    <button class="group-button" data-group="6">그룹 6</button>
+    <button class="group-button" data-group="7">그룹 7</button>
+    <button class="group-button" data-group="8">그룹 8</button>
   </div>
 
   <div id="chart-container">
@@ -195,19 +227,22 @@
     const ctx = document.getElementById('predictionChart').getContext('2d');
     const roundOverlayEl = document.getElementById('roundOverlay');
     const roundButtons = document.querySelectorAll('.round-button');
+    const groupButtons = document.querySelectorAll('.group-button');
 
     const ACTUAL_VALUE = 1616;
     const RESET_PASSWORD  = "SNU-TA-Reset-9237!";
-    const ACTUAL_PASSWORD = "1616";
 
-    let baseDatasets = [];
+    // 상태 변수들
+    let baseDatasets = [];        // 현재 차트에 쓸 데이터셋(필터 적용 후)
+    let baseAllDatasets = [];     // 전체 그룹 데이터셋(필터 전)
     let highlightDataset = null;
     let actualVisible   = false;
-    let actualUnlocked  = false;
-    let allPoints = [];
-    let roundStats = {};
+    let allPoints       = [];     // 필터 적용 후 포인트
+    let allPointsAll    = [];     // 전체 포인트(필터 전)
+    let roundStats      = {};
     let currentRoundShown = null;
-    let currentLang = 'ko';
+    let currentGroupShown = null; // 현재 필터 중인 그룹(1~8)
+    let currentLang     = 'ko';
 
     const TEXT = {
       ko: {
@@ -221,11 +256,9 @@
            아래 회차 버튼을 눌러 해당 회차의 <b>그룹별 평균 / 전체 평균 / 평균에 가장 가까운 학생</b>을 확인할 수 있습니다.`,
         showActual: "실제값 공개",
         hideActual: "실제값 숨기기",
-        actualPrompt: "실제값을 처음 공개하려면 비밀번호를 입력하세요:",
         downloadCsv: "CSV 다운로드",
         reset: "초기화",
         resetPrompt: "초기화 비밀번호를 입력하세요:",
-        langPrompt: "언어를 변경하려면 비밀번호를 입력하세요:",
         resetConfirm: "⚠ 정말 모든 데이터를 삭제할까요?",
         resetDone: "모든 데이터가 초기화되었습니다!",
         badPassword: "비밀번호가 올바르지 않습니다.",
@@ -245,6 +278,8 @@
             ? `전체 평균에 가장 가까운 학생: <b>${closest.name}</b> (값 ${closest.value}, 그룹 ${closest.group})`
             : `전체 평균에 가장 가까운 학생: 정보 없음`,
         roundBtn: (r) => `${r}회차`,
+        actualLabel: "실제값",
+        groupBtn: (g) => `그룹 ${g}`
       },
       en: {
         htmlLang: "en",
@@ -257,11 +292,9 @@
            Use the round buttons below to view <b>group means / overall mean / the student closest to the mean</b>.`,
         showActual: "Show actual value",
         hideActual: "Hide actual value",
-        actualPrompt: "Enter the password to reveal the actual value for the first time:",
         downloadCsv: "Download CSV",
         reset: "Reset",
         resetPrompt: "Enter the reset password:",
-        langPrompt: "Enter the password to change the language:",
         resetConfirm: "⚠ Are you sure you want to delete ALL data?",
         resetDone: "All data has been reset!",
         badPassword: "Incorrect password.",
@@ -281,10 +314,14 @@
             ? `Closest to overall mean: <b>${closest.name}</b> (value ${closest.value}, group ${closest.group})`
             : `Closest to overall mean: No info`,
         roundBtn: (r) => `Round ${r}`,
+        actualLabel: "Actual",
+        groupBtn: (g) => `Group ${g}`
       }
     };
 
-    function t() { return TEXT[currentLang] || TEXT.ko; }
+    function t() {
+      return TEXT[currentLang] || TEXT.ko;
+    }
 
     function updateDatasetLabels() {
       const L = t();
@@ -307,7 +344,12 @@
       const L = t();
 
       const groupLines = Object.keys(stats.groupMeans)
-        .sort()
+        .sort((a, b) => {
+          const na = Number(a), nb = Number(b);
+          const aNum = Number.isFinite(na), bNum = Number.isFinite(nb);
+          if (aNum && bNum) return na - nb;
+          return String(a).localeCompare(String(b), 'ko');
+        })
         .map(g => `<li>${L.groupLabel(g)}: ${stats.groupMeans[g].toFixed(1)}</li>`)
         .join("");
 
@@ -335,9 +377,7 @@
       document.getElementById('pageTitle').textContent = L.pageTitle;
       document.getElementById('pageDesc').innerHTML = L.pageDescHtml;
 
-      // ✅ 언어 버튼: 한 단어만 (현재 언어의 반대)
       document.getElementById('langBtn').textContent = (currentLang === "ko") ? "English" : "한국어";
-
       document.getElementById('downloadCsvBtn').textContent = L.downloadCsv;
       document.getElementById('resetBtn').textContent = L.reset;
 
@@ -348,6 +388,14 @@
         const r = parseInt(btn.dataset.round, 10);
         btn.textContent = L.roundBtn(r);
       });
+
+      groupButtons.forEach(btn => {
+        const g = btn.dataset.group;
+        btn.textContent = L.groupBtn(g);
+      });
+
+      // 차트 아직 없으면 여기서 종료
+      if (!window.predictionChart) return;
 
       predictionChart.options.scales.x.title.text = L.xTitle;
       predictionChart.options.scales.y.title.text = L.yTitle;
@@ -367,12 +415,19 @@
       predictionChart.update();
     }
 
+    // CSV escape
+    function csvEscape(v) {
+      const s = String(v ?? "");
+      if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    }
+
     function makeActualDataset() {
       const lineData = [];
       for (let r = 1; r <= 6; r++) lineData.push({ x: r, y: ACTUAL_VALUE });
       return {
         type: 'line',
-        label: 'Actual',
+        label: t().actualLabel,
         data: lineData,
         borderColor: 'red',
         borderWidth: 4,
@@ -380,6 +435,25 @@
         fill: false,
         _isActual: true
       };
+    }
+
+    function refreshFilteredBase() {
+      if (currentGroupShown == null) {
+        baseDatasets = [...baseAllDatasets];
+        allPoints = [...allPointsAll];
+        return;
+      }
+      const g = String(currentGroupShown);
+      baseDatasets = baseAllDatasets.filter(ds => String(ds._groupName) === g);
+      allPoints = allPointsAll.filter(p => String(p.group) === g);
+    }
+
+    function applyGroupFilterUI() {
+      groupButtons.forEach(b => b.classList.remove('active'));
+      if (currentGroupShown != null) {
+        const activeBtn = document.querySelector(`.group-button[data-group="${currentGroupShown}"]`);
+        if (activeBtn) activeBtn.classList.add('active');
+      }
     }
 
     function applyDatasets() {
@@ -462,6 +536,7 @@
         }
       }
     });
+    window.predictionChart = predictionChart;
 
     const groupColors = [
       '#e41a1c', '#377eb8', '#4daf4a', '#984ea3',
@@ -472,7 +547,7 @@
       .orderBy('round', 'asc')
       .onSnapshot((snapshot) => {
         const groupMap = {};
-        allPoints = [];
+        allPointsAll = [];
 
         snapshot.forEach((doc) => {
           const data = doc.data();
@@ -480,12 +555,18 @@
           if (typeof data.round === 'number' && typeof data.value === 'number') {
             if (!groupMap[group]) groupMap[group] = [];
             groupMap[group].push({ x: data.round, y: data.value, name: data.name || '' });
-            allPoints.push({ name: data.name || '', group, round: data.round, value: data.value });
+            allPointsAll.push({ name: data.name || '', group, round: data.round, value: data.value });
           }
         });
 
-        const groupNames = Object.keys(groupMap).sort();
-        baseDatasets = groupNames.map((groupName, idx) => ({
+        const groupNames = Object.keys(groupMap).sort((a, b) => {
+          const na = Number(a), nb = Number(b);
+          const aNum = Number.isFinite(na), bNum = Number.isFinite(nb);
+          if (aNum && bNum) return na - nb;
+          return String(a).localeCompare(String(b), 'ko');
+        });
+
+        baseAllDatasets = groupNames.map((groupName, idx) => ({
           label: t().groupLabel(groupName),
           data: groupMap[groupName],
           pointRadius: 4,
@@ -493,11 +574,12 @@
           _groupName: groupName
         }));
 
+        // 전체 데이터 기준으로 회차 통계 계산
         roundStats = {};
         const roundGroupValues = {};
         const roundAllValues   = {};
 
-        allPoints.forEach(p => {
+        allPointsAll.forEach(p => {
           if (!roundGroupValues[p.round]) roundGroupValues[p.round] = {};
           if (!roundGroupValues[p.round][p.group]) roundGroupValues[p.round][p.group] = [];
           roundGroupValues[p.round][p.group].push(p.value);
@@ -532,6 +614,8 @@
           roundStats[r] = { groupMeans, overallMean, closest };
         }
 
+        // 현재 그룹 필터 적용 후 차트 반영
+        refreshFilteredBase();
         applyDatasets();
       });
 
@@ -556,27 +640,24 @@
         rows.push([d.name ?? "", d.group ?? "", d.round ?? "", d.value ?? "", ts]);
       });
 
-      const csvContent = "data:text/csv;charset=utf-8,\ufeff" + rows.map(e => e.join(",")).join("\n");
+      const csvContent = "data:text/csv;charset=utf-8,\ufeff" +
+        rows.map(row => row.map(csvEscape).join(",")).join("\n");
       const link = document.createElement("a");
       link.href = encodeURI(csvContent);
       link.download = "predictions_backup_" + new Date().toISOString().slice(0, 10) + ".csv";
       link.click();
     });
 
-    // ✅ 실제값 공개: 비밀번호 없이 동작하도록 수정
+    // 실제값 공개: 비밀번호 없이 토글
     document.getElementById("toggleActualBtn").addEventListener("click", () => {
       const L = t();
-
-      actualUnlocked = true; // (원래 잠금 로직이 있어 남겨둠 - 의미상 unlock 처리)
       actualVisible = !actualVisible;
-
       document.getElementById("toggleActualBtn").textContent =
         actualVisible ? L.hideActual : L.showActual;
-
       applyDatasets();
     });
 
-    // ✅ 언어 변경(English): 비밀번호 없이 동작하도록 수정
+    // 언어 변경: 비밀번호 없이 토글
     document.getElementById("langBtn").addEventListener("click", async () => {
       const nextLang = (currentLang === "ko") ? "en" : "ko";
       try {
@@ -605,7 +686,28 @@
       });
     });
 
-    // ✅ 초기화: 비밀번호 유지(그대로)
+    // 그룹 버튼: 필터 토글
+    groupButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const g = btn.dataset.group;
+
+        if (currentGroupShown === g) {
+          currentGroupShown = null; // 해제
+        } else {
+          currentGroupShown = g;
+        }
+
+        refreshFilteredBase();
+        applyGroupFilterUI();
+
+        // 필터 변경 시 추세선 초기화
+        if (highlightDataset) highlightDataset = null;
+
+        applyDatasets();
+      });
+    });
+
+    // 초기화(비밀번호 유지)
     document.getElementById("resetBtn").addEventListener("click", async () => {
       const L = t();
       const input = prompt(L.resetPrompt);
