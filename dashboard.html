@@ -236,6 +236,7 @@
     let baseDatasets = [];        // 현재 차트에 쓸 데이터셋(필터 적용 후)
     let baseAllDatasets = [];     // 전체 그룹 데이터셋(필터 전)
     let highlightDataset = null;
+    let groupMeanDataset = null;  // 그룹 평균 점 데이터셋(필터 시)
     let actualVisible   = false;
     let allPoints       = [];     // 필터 적용 후 포인트
     let allPointsAll    = [];     // 전체 포인트(필터 전)
@@ -279,7 +280,10 @@
             : `전체 평균에 가장 가까운 학생: 정보 없음`,
         roundBtn: (r) => `${r}회차`,
         actualLabel: "실제값",
-        groupBtn: (g) => `그룹 ${g}`
+        groupBtn: (g) => `그룹 ${g}`,
+        groupMeanLegend: (g) => `그룹 ${g} 평균`,
+        groupMeanTrendLabel: (g) => `그룹 ${g} 평균 추세`,
+        groupMeanTooltip: (g, round, value) => `그룹 ${g} 평균 - ${round}회차: ${value}`
       },
       en: {
         htmlLang: "en",
@@ -315,7 +319,10 @@
             : `Closest to overall mean: No info`,
         roundBtn: (r) => `Round ${r}`,
         actualLabel: "Actual",
-        groupBtn: (g) => `Group ${g}`
+        groupBtn: (g) => `Group ${g}`,
+        groupMeanLegend: (g) => `Group ${g} mean`,
+        groupMeanTrendLabel: (g) => `Group ${g} mean trend`,
+        groupMeanTooltip: (g, round, value) => `Group ${g} mean - Round ${round}: ${value}`
       }
     };
 
@@ -328,6 +335,9 @@
       baseDatasets.forEach(ds => {
         if (ds && ds._groupName != null) ds.label = L.groupLabel(ds._groupName);
       });
+      if (groupMeanDataset && groupMeanDataset._groupName != null) {
+        groupMeanDataset.label = L.groupMeanLegend(groupMeanDataset._groupName);
+      }
       if (highlightDataset && highlightDataset._name) {
         highlightDataset.label = L.trendLabel(highlightDataset._name);
       }
@@ -368,53 +378,6 @@
       currentRoundShown = round;
     }
 
-    function applyLanguageToStaticUI() {
-      const L = t();
-
-      document.documentElement.lang = L.htmlLang;
-      document.title = L.docTitle;
-
-      document.getElementById('pageTitle').textContent = L.pageTitle;
-      document.getElementById('pageDesc').innerHTML = L.pageDescHtml;
-
-      document.getElementById('langBtn').textContent = (currentLang === "ko") ? "English" : "한국어";
-      document.getElementById('downloadCsvBtn').textContent = L.downloadCsv;
-      document.getElementById('resetBtn').textContent = L.reset;
-
-      document.getElementById("toggleActualBtn").textContent =
-        actualVisible ? L.hideActual : L.showActual;
-
-      roundButtons.forEach(btn => {
-        const r = parseInt(btn.dataset.round, 10);
-        btn.textContent = L.roundBtn(r);
-      });
-
-      groupButtons.forEach(btn => {
-        const g = btn.dataset.group;
-        btn.textContent = L.groupBtn(g);
-      });
-
-      // 차트 아직 없으면 여기서 종료
-      if (!window.predictionChart) return;
-
-      predictionChart.options.scales.x.title.text = L.xTitle;
-      predictionChart.options.scales.y.title.text = L.yTitle;
-      predictionChart.options.scales.x.ticks.callback = (v) => L.xTick(v);
-
-      predictionChart.options.plugins.tooltip.callbacks.label = (context) => {
-        const p = context.raw;
-        const name = (p && p.name) ? p.name : L.tooltipUnknown;
-        const round = context.parsed.x;
-        const value = context.parsed.y;
-        return L.tooltipLabel(name, round, value);
-      };
-
-      updateDatasetLabels();
-      if (currentRoundShown != null) showRoundOverlay(currentRoundShown);
-
-      predictionChart.update();
-    }
-
     // CSV escape
     function csvEscape(v) {
       const s = String(v ?? "");
@@ -437,15 +400,57 @@
       };
     }
 
+    function buildGroupMeanDataset() {
+      if (currentGroupShown == null) {
+        groupMeanDataset = null;
+        return;
+      }
+      const g = String(currentGroupShown);
+      const L = t();
+      const points = [];
+
+      for (let r = 1; r <= 6; r++) {
+        const stats = roundStats[r];
+        if (!stats || !stats.groupMeans) continue;
+        const mean = stats.groupMeans[g];
+        if (typeof mean === 'number' && !isNaN(mean)) {
+          points.push({
+            x: r,
+            y: mean,
+            group: g,
+            _isGroupMean: true
+          });
+        }
+      }
+
+      if (points.length === 0) {
+        groupMeanDataset = null;
+        return;
+      }
+
+      groupMeanDataset = {
+        type: 'scatter',
+        label: L.groupMeanLegend(g),
+        data: points,
+        pointRadius: 6,              // 일반 점(4)보다 살짝 크게
+        pointBackgroundColor: '#000000',
+        pointBorderColor: '#000000',
+        showLine: false,
+        _isGroupMeanDataset: true,
+        _groupName: g
+      };
+    }
+
     function refreshFilteredBase() {
       if (currentGroupShown == null) {
         baseDatasets = [...baseAllDatasets];
         allPoints = [...allPointsAll];
-        return;
+      } else {
+        const g = String(currentGroupShown);
+        baseDatasets = baseAllDatasets.filter(ds => String(ds._groupName) === g);
+        allPoints = allPointsAll.filter(p => String(p.group) === g);
       }
-      const g = String(currentGroupShown);
-      baseDatasets = baseAllDatasets.filter(ds => String(ds._groupName) === g);
-      allPoints = allPointsAll.filter(p => String(p.group) === g);
+      buildGroupMeanDataset();
     }
 
     function applyGroupFilterUI() {
@@ -458,10 +463,26 @@
 
     function applyDatasets() {
       const datasets = [...baseDatasets];
+      if (currentGroupShown != null && groupMeanDataset) datasets.push(groupMeanDataset);
       if (actualVisible) datasets.push(makeActualDataset());
       if (highlightDataset) datasets.push(highlightDataset);
       predictionChart.data.datasets = datasets;
       predictionChart.update();
+    }
+
+    function tooltipLabelCallback(context) {
+      const L = t();
+      const p = context.raw;
+      const round = context.parsed.x;
+      const value = context.parsed.y;
+
+      if (p && p._isGroupMean && p.group != null) {
+        const g = String(p.group);
+        return L.groupMeanTooltip(g, round, value);
+      }
+
+      const name = (p && p.name) ? p.name : L.tooltipUnknown;
+      return L.tooltipLabel(name, round, value);
     }
 
     const predictionChart = new Chart(ctx, {
@@ -475,12 +496,7 @@
           legend: { display: true },
           tooltip: {
             callbacks: {
-              label: (context) => {
-                const L = t();
-                const p = context.raw;
-                const name = (p && p.name) ? p.name : L.tooltipUnknown;
-                return L.tooltipLabel(name, context.parsed.x, context.parsed.y);
-              }
+              label: tooltipLabelCallback
             }
           }
         },
@@ -503,7 +519,38 @@
             const ds = chart.data.datasets[dsIndex];
             const point = ds.data[index];
 
-            const name = point.name;
+            // ✅ 그룹 평균 점 위에 올렸을 때: 그룹 평균 추세선
+            if (point && point._isGroupMean && point.group) {
+              const g = String(point.group);
+              const points = [];
+              for (let r = 1; r <= 6; r++) {
+                const stats = roundStats[r];
+                if (!stats || !stats.groupMeans) continue;
+                const mean = stats.groupMeans[g];
+                if (typeof mean === 'number' && !isNaN(mean)) {
+                  points.push({ x: r, y: mean });
+                }
+              }
+              if (points.length > 1) {
+                highlightDataset = {
+                  type: 'line',
+                  label: t().groupMeanTrendLabel(g),
+                  data: points,
+                  borderColor: 'rgba(0,0,0,0.7)',
+                  borderWidth: 2,
+                  pointRadius: 0,
+                  fill: false,
+                  borderDash: [4, 3]
+                };
+              } else {
+                highlightDataset = null;
+              }
+              applyDatasets();
+              return;
+            }
+
+            // ✅ 일반 학생 점 위에 올렸을 때: 그 학생 추세선
+            const name = point && point.name;
             if (name) {
               const personPoints = allPoints
                 .filter(p => p.name === name)
@@ -618,6 +665,50 @@
         refreshFilteredBase();
         applyDatasets();
       });
+
+    function applyLanguageToStaticUI() {
+      const L = t();
+
+      document.documentElement.lang = L.htmlLang;
+      document.title = L.docTitle;
+
+      document.getElementById('pageTitle').textContent = L.pageTitle;
+      document.getElementById('pageDesc').innerHTML = L.pageDescHtml;
+
+      document.getElementById('langBtn').textContent = (currentLang === "ko") ? "English" : "한국어";
+      document.getElementById('downloadCsvBtn').textContent = L.downloadCsv;
+      document.getElementById('resetBtn').textContent = L.reset;
+
+      document.getElementById("toggleActualBtn").textContent =
+        actualVisible ? L.hideActual : L.showActual;
+
+      roundButtons.forEach(btn => {
+        const r = parseInt(btn.dataset.round, 10);
+        btn.textContent = L.roundBtn(r);
+      });
+
+      groupButtons.forEach(btn => {
+        const g = btn.dataset.group;
+        btn.textContent = L.groupBtn(g);
+      });
+
+      // 차트 아직 없으면 여기서 종료
+      if (!window.predictionChart) return;
+
+      // 언어 바뀔 때 그룹 평균 데이터셋 라벨도 재구성
+      buildGroupMeanDataset();
+
+      predictionChart.options.scales.x.title.text = L.xTitle;
+      predictionChart.options.scales.y.title.text = L.yTitle;
+      predictionChart.options.scales.x.ticks.callback = (v) => L.xTick(v);
+
+      predictionChart.options.plugins.tooltip.callbacks.label = tooltipLabelCallback;
+
+      updateDatasetLabels();
+      if (currentRoundShown != null) showRoundOverlay(currentRoundShown);
+
+      predictionChart.update();
+    }
 
     uiDocRef.onSnapshot(async (doc) => {
       if (!doc.exists) {
