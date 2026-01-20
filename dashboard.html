@@ -273,7 +273,7 @@
     const roundButtons = document.querySelectorAll('.round-button');
     const groupButtons = document.querySelectorAll('.group-button');
 
-    const ACTUAL_VALUE = 1564;  // ✅ 실제값 수정
+    const ACTUAL_VALUE = 1564;  // ✅ 실제값
     const RESET_PASSWORD  = "SNU-TA-Reset-9237!";
 
     // 상태 변수들
@@ -337,7 +337,8 @@
           `다음 조건과 일치하는 값 ${count}개를 삭제할까요?\n\n회차: ${round}\n이름: ${name}\n값: ${value}`,
         deleteDone: (count) => `${count}개의 값이 삭제되었습니다.`,
         deleteNotFound: "해당 조건과 일치하는 값이 없습니다.",
-        deleteError: "값 삭제 중 오류가 발생했습니다."
+        deleteError: "값 삭제 중 오류가 발생했습니다.",
+        actualTooltip: (round, value) => `실제값 - ${round}회차: ${value}`
       },
       en: {
         htmlLang: "en",
@@ -386,7 +387,8 @@
           `Delete ${count} value(s) matching:\n\nRound: ${round}\nName: ${name}\nValue: ${value}?`,
         deleteDone: (count) => `${count} value(s) deleted.`,
         deleteNotFound: "No matching values found.",
-        deleteError: "An error occurred while deleting the value."
+        deleteError: "An error occurred while deleting the value.",
+        actualTooltip: (round, value) => `Actual - Round ${round}: ${value}`
       }
     };
 
@@ -460,7 +462,8 @@
         borderWidth: 4,
         pointRadius: 0,
         fill: false,
-        _isActual: true
+        _isActual: true,
+        _isActualDataset: true
       };
     }
 
@@ -539,6 +542,10 @@
       const p = context.raw;
       const round = context.parsed.x;
       const value = context.parsed.y;
+
+      if (context.dataset && context.dataset._isActualDataset) {
+        return L.actualTooltip(round, value);
+      }
 
       if (p && p._isGroupMean && p.group != null) {
         const g = String(p.group);
