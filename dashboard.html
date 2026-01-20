@@ -98,6 +98,42 @@
       font-weight: 600;
     }
 
+    /* 개별 값 삭제 패널 */
+    #delete-panel {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    #delete-panel input {
+      padding: 3px 6px;
+      font-size: 0.8rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    #deleteRound {
+      width: 70px;
+    }
+    #deleteName {
+      width: 120px;
+    }
+    #deleteValue {
+      width: 90px;
+    }
+    #deleteValueBtn {
+      background-color: #f0f0f0;
+      border: 1px solid #ccc;
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #deleteValueBtn:hover {
+      background-color: #ddd;
+    }
+
     #chart-container {
       position: relative;
       height: 70vh;
@@ -200,6 +236,14 @@
     <button class="group-button" data-group="8">그룹 8</button>
   </div>
 
+  <!-- 개별 값 삭제 패널 -->
+  <div id="delete-panel">
+    <input type="number" id="deleteRound" min="1" max="6" placeholder="회차" />
+    <input type="text" id="deleteName" placeholder="이름" />
+    <input type="number" id="deleteValue" placeholder="값" />
+    <button id="deleteValueBtn">값 삭제</button>
+  </div>
+
   <div id="chart-container">
     <canvas id="predictionChart"></canvas>
     <div id="roundOverlay"></div>
@@ -229,7 +273,7 @@
     const roundButtons = document.querySelectorAll('.round-button');
     const groupButtons = document.querySelectorAll('.group-button');
 
-    const ACTUAL_VALUE = 1564;
+    const ACTUAL_VALUE = 1564;  // ✅ 실제값 수정
     const RESET_PASSWORD  = "SNU-TA-Reset-9237!";
 
     // 상태 변수들
@@ -283,7 +327,17 @@
         groupBtn: (g) => `그룹 ${g}`,
         groupMeanLegend: (g) => `그룹 ${g} 평균`,
         groupMeanTrendLabel: (g) => `그룹 ${g} 평균 추세`,
-        groupMeanTooltip: (g, round, value) => `그룹 ${g} 평균 - ${round}회차: ${value}`
+        groupMeanTooltip: (g, round, value) => `그룹 ${g} 평균 - ${round}회차: ${value}`,
+        deleteBtn: "값 삭제",
+        deleteRoundPh: "회차",
+        deleteNamePh: "이름",
+        deleteValuePh: "값",
+        deleteInvalid: "라운드, 이름, 값을 모두 올바르게 입력해주세요.",
+        deleteConfirm: (round, name, value, count) =>
+          `다음 조건과 일치하는 값 ${count}개를 삭제할까요?\n\n회차: ${round}\n이름: ${name}\n값: ${value}`,
+        deleteDone: (count) => `${count}개의 값이 삭제되었습니다.`,
+        deleteNotFound: "해당 조건과 일치하는 값이 없습니다.",
+        deleteError: "값 삭제 중 오류가 발생했습니다."
       },
       en: {
         htmlLang: "en",
@@ -322,7 +376,17 @@
         groupBtn: (g) => `Group ${g}`,
         groupMeanLegend: (g) => `Group ${g} mean`,
         groupMeanTrendLabel: (g) => `Group ${g} mean trend`,
-        groupMeanTooltip: (g, round, value) => `Group ${g} mean - Round ${round}: ${value}`
+        groupMeanTooltip: (g, round, value) => `Group ${g} mean - Round ${round}: ${value}`,
+        deleteBtn: "Delete value",
+        deleteRoundPh: "Round",
+        deleteNamePh: "Name",
+        deleteValuePh: "Value",
+        deleteInvalid: "Please enter valid round, name, and value.",
+        deleteConfirm: (round, name, value, count) =>
+          `Delete ${count} value(s) matching:\n\nRound: ${round}\nName: ${name}\nValue: ${value}?`,
+        deleteDone: (count) => `${count} value(s) deleted.`,
+        deleteNotFound: "No matching values found.",
+        deleteError: "An error occurred while deleting the value."
       }
     };
 
@@ -519,7 +583,7 @@
             const ds = chart.data.datasets[dsIndex];
             const point = ds.data[index];
 
-            // ✅ 그룹 평균 점 위에 올렸을 때: 그룹 평균 추세선
+            // 그룹 평균 점 위에 올렸을 때: 그룹 평균 추세선
             if (point && point._isGroupMean && point.group) {
               const g = String(point.group);
               const points = [];
@@ -549,7 +613,7 @@
               return;
             }
 
-            // ✅ 일반 학생 점 위에 올렸을 때: 그 학생 추세선
+            // 일반 학생 점 위에 올렸을 때: 그 학생 추세선
             const name = point && point.name;
             if (name) {
               const personPoints = allPoints
@@ -692,6 +756,12 @@
         btn.textContent = L.groupBtn(g);
       });
 
+      // 삭제 패널 텍스트/placeholder
+      document.getElementById('deleteValueBtn').textContent = L.deleteBtn;
+      document.getElementById('deleteRound').placeholder = L.deleteRoundPh;
+      document.getElementById('deleteName').placeholder = L.deleteNamePh;
+      document.getElementById('deleteValue').placeholder = L.deleteValuePh;
+
       // 차트 아직 없으면 여기서 종료
       if (!window.predictionChart) return;
 
@@ -798,6 +868,54 @@
       });
     });
 
+    // 개별 값 삭제
+    document.getElementById('deleteValueBtn').addEventListener('click', async () => {
+      const L = t();
+      const roundInput = document.getElementById('deleteRound').value.trim();
+      const nameInput = document.getElementById('deleteName').value.trim();
+      const valueInput = document.getElementById('deleteValue').value.trim();
+
+      const round = parseInt(roundInput, 10);
+      const value = parseFloat(valueInput);
+
+      if (!roundInput || isNaN(round) || !nameInput || !valueInput || isNaN(value)) {
+        alert(L.deleteInvalid);
+        return;
+      }
+
+      try {
+        let query = db.collection('predictions')
+          .where('round', '==', round)
+          .where('name', '==', nameInput)
+          .where('value', '==', value);
+
+        const snapshot = await query.get();
+        const count = snapshot.size;
+
+        if (count === 0) {
+          alert(L.deleteNotFound);
+          return;
+        }
+
+        const ok = confirm(L.deleteConfirm(round, nameInput, value, count));
+        if (!ok) return;
+
+        const batch = db.batch();
+        snapshot.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+
+        alert(L.deleteDone(count));
+
+        // 입력칸 초기화
+        document.getElementById('deleteRound').value = "";
+        document.getElementById('deleteName').value = "";
+        document.getElementById('deleteValue').value = "";
+      } catch (e) {
+        console.error(e);
+        alert(L.deleteError);
+      }
+    });
+
     // 초기화(비밀번호 유지)
     document.getElementById("resetBtn").addEventListener("click", async () => {
       const L = t();
@@ -823,4 +941,3 @@
   </script>
 </body>
 </html>
-
