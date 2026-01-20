@@ -14,16 +14,19 @@
     h1 { font-size: 1.4rem; margin-bottom: 4px; }
     p { font-size: 0.9rem; margin-top: 0; color: #555; }
 
-    /* 우상단 버튼 컨테이너 */
+    /* 우상단 버튼 컨테이너: 2열 x 3행 그리드 (오른쪽 정렬) */
     #top-buttons {
       position: absolute;
       top: 10px;
       right: 10px;
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
+      display: grid;
+      grid-template-columns: repeat(2, auto);
+      grid-auto-rows: auto;
+      column-gap: 8px;
+      row-gap: 8px;
       z-index: 10;
-      justify-content: flex-end;
+      justify-items: end;
+      justify-content: end;
     }
 
     .top-button {
@@ -36,19 +39,11 @@
       color: #333;
       white-space: nowrap;
       text-align: center;
+      min-width: 110px;
     }
     .top-button:hover {
       background-color: #dcdcdc;
     }
-
-    .top-stack {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .actual-wide { width: 120px; }
-    .stack-narrow { width: 110px; }
 
     /* 회차 버튼 */
     #round-buttons {
@@ -89,34 +84,6 @@
       background-color: #ddd;
       font-weight: 600;
     }
-
-    /* 개별 값 삭제 패널 */
-    #delete-panel {
-      margin-top: 8px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      align-items: center;
-    }
-    #delete-panel input {
-      padding: 3px 6px;
-      font-size: 0.8rem;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      box-sizing: border-box;
-    }
-    #deleteRound { width: 70px; }
-    #deleteName  { width: 120px; }
-    #deleteValue { width: 90px; }
-    #deleteValueBtn {
-      background-color: #f0f0f0;
-      border: 1px solid #ccc;
-      padding: 4px 10px;
-      font-size: 0.8rem;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    #deleteValueBtn:hover { background-color: #ddd; }
 
     #chart-container {
       position: relative;
@@ -178,13 +145,17 @@
 <body>
 
   <!-- 상단 우측 버튼들 -->
+  <!-- 순서:
+       1행: 실제값공개  | CSV 다운로드
+       2행: 중심부표시  | 초기화
+       3행: 특정값제거  | 한/영 -->
   <div id="top-buttons">
-    <button id="toggleActualBtn" class="top-button actual-wide">실제값 공개</button>
-    <div class="top-stack">
-      <button id="downloadCsvBtn" class="top-button stack-narrow">CSV 다운로드</button>
-      <button id="resetBtn" class="top-button stack-narrow">초기화</button>
-      <button id="langBtn" class="top-button stack-narrow">English</button>
-    </div>
+    <button id="toggleActualBtn"    class="top-button">실제값 공개</button>
+    <button id="downloadCsvBtn"     class="top-button">CSV 다운로드</button>
+    <button id="focusCenterBtn"     class="top-button">중심부 표시</button>
+    <button id="resetBtn"           class="top-button">초기화</button>
+    <button id="deleteValueOpenBtn" class="top-button">특정값 제거</button>
+    <button id="langBtn"            class="top-button">English</button>
   </div>
 
   <h1 id="pageTitle">예측치 산점도 (실시간)</h1>
@@ -215,14 +186,6 @@
     <button class="group-button" data-group="6">그룹 6</button>
     <button class="group-button" data-group="7">그룹 7</button>
     <button class="group-button" data-group="8">그룹 8</button>
-  </div>
-
-  <!-- 개별 값 삭제 패널 -->
-  <div id="delete-panel">
-    <input type="number" id="deleteRound" min="1" max="6" placeholder="회차" />
-    <input type="text" id="deleteName" placeholder="이름" />
-    <input type="number" id="deleteValue" placeholder="값" />
-    <button id="deleteValueBtn">값 삭제</button>
   </div>
 
   <div id="chart-container">
@@ -263,6 +226,7 @@
     let highlightDataset = null;
     let groupMeanDataset = null;
     let actualVisible   = false;
+    let focusCenterOn   = false;   // ✅ 중심부(2500까지) 표시 토글
     let allPoints       = [];
     let allPointsAll    = [];
     let roundStats      = {};
@@ -309,18 +273,21 @@
         groupMeanLegend: (g) => `그룹 ${g} 평균`,
         groupMeanTrendLabel: (g) => `그룹 ${g} 평균 추세`,
         groupMeanTooltip: (g, round, value) => `그룹 ${g} 평균 - ${round}회차: ${value}`,
-        deleteBtn: "값 삭제",
-        deleteRoundPh: "회차",
-        deleteNamePh: "이름",
-        deleteValuePh: "값",
+        deleteBtn: "특정값 제거",
         deleteInvalid: "라운드, 이름, 값을 모두 올바르게 입력해주세요.",
         deleteConfirm: (round, name, value, count) =>
           `다음 조건과 일치하는 값 ${count}개를 삭제할까요?\n\n회차: ${round}\n이름: ${name}\n값: ${value}`,
         deleteDone: (count) => `${count}개의 값이 삭제되었습니다.`,
         deleteNotFound: "해당 조건과 일치하는 값이 없습니다.",
         deleteError: "값 삭제 중 오류가 발생했습니다.",
+        deletePromptRound: "삭제할 값의 회차(1~6)를 입력하세요:",
+        deletePromptName: "삭제할 학생 이름을 정확히 입력하세요:",
+        deletePromptValue: "삭제할 수치를 입력하세요:",
         // ✅ 실제값 툴팁: 값만
-        actualTooltip: (value) => `실제값: ${value}`
+        actualTooltip: (value) => `실제값: ${value}`,
+        // ✅ 중심부(2500까지) 버튼
+        focusOn: "중심부 표시",
+        focusOff: "전체 범위"
       },
       en: {
         htmlLang: "en",
@@ -360,18 +327,20 @@
         groupMeanLegend: (g) => `Group ${g} mean`,
         groupMeanTrendLabel: (g) => `Group ${g} mean trend`,
         groupMeanTooltip: (g, round, value) => `Group ${g} mean - Round ${round}: ${value}`,
-        deleteBtn: "Delete value",
-        deleteRoundPh: "Round",
-        deleteNamePh: "Name",
-        deleteValuePh: "Value",
+        deleteBtn: "Remove value",
         deleteInvalid: "Please enter valid round, name, and value.",
         deleteConfirm: (round, name, value, count) =>
           `Delete ${count} value(s) matching:\n\nRound: ${round}\nName: ${name}\nValue: ${value}?`,
         deleteDone: (count) => `${count} value(s) deleted.`,
         deleteNotFound: "No matching values found.",
         deleteError: "An error occurred while deleting the value.",
+        deletePromptRound: "Enter the round (1–6) of the value to delete:",
+        deletePromptName: "Enter the exact student name of the value to delete:",
+        deletePromptValue: "Enter the value (number) to delete:",
         // ✅ Actual 툴팁: 값만
-        actualTooltip: (value) => `Actual: ${value}`
+        actualTooltip: (value) => `Actual: ${value}`,
+        focusOn: "Focus center",
+        focusOff: "Show full range"
       }
     };
 
@@ -443,7 +412,6 @@
         borderColor: 'red',
         borderWidth: 4,
         pointRadius: 0,
-        // hover 잘 잡히도록 hitRadius 넉넉하게
         pointHitRadius: 10,
         pointHoverRadius: 0,
         fill: false,
@@ -547,7 +515,6 @@
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
-        // ✅ 겹쳐 있을 때 둘 다 뜨도록 point 모드 + intersect false
         interaction: {
           mode: 'point',
           intersect: false
@@ -571,7 +538,10 @@
             min: 1,
             max: 6
           },
-          y: { title: { display: true, text: '예측치' } }
+          y: {
+            title: { display: true, text: '예측치' }
+            // y.max는 focusCenterOn에 따라 동적으로 설정
+          }
         },
         onHover: (event, activeElements, chart) => {
           if (activeElements.length > 0) {
@@ -736,12 +706,18 @@
       document.getElementById('pageTitle').textContent = L.pageTitle;
       document.getElementById('pageDesc').innerHTML = L.pageDescHtml;
 
-      document.getElementById('langBtn').textContent = (currentLang === "ko") ? "English" : "한국어";
-      document.getElementById('downloadCsvBtn').textContent = L.downloadCsv;
-      document.getElementById('resetBtn').textContent = L.reset;
-
-      document.getElementById("toggleActualBtn").textContent =
+      // 우상단 버튼 텍스트
+      document.getElementById('toggleActualBtn').textContent =
         actualVisible ? L.hideActual : L.showActual;
+
+      document.getElementById('downloadCsvBtn').textContent = L.downloadCsv;
+
+      document.getElementById('focusCenterBtn').textContent =
+        focusCenterOn ? L.focusOff : L.focusOn;
+
+      document.getElementById('resetBtn').textContent = L.reset;
+      document.getElementById('deleteValueOpenBtn').textContent = L.deleteBtn;
+      document.getElementById('langBtn').textContent = (currentLang === "ko") ? "English" : "한국어";
 
       roundButtons.forEach(btn => {
         const r = parseInt(btn.dataset.round, 10);
@@ -752,11 +728,6 @@
         const g = btn.dataset.group;
         btn.textContent = L.groupBtn(g);
       });
-
-      document.getElementById('deleteValueBtn').textContent = L.deleteBtn;
-      document.getElementById('deleteRound').placeholder = L.deleteRoundPh;
-      document.getElementById('deleteName').placeholder = L.deleteNamePh;
-      document.getElementById('deleteValue').placeholder = L.deleteValuePh;
 
       if (!window.predictionChart) return;
 
@@ -810,6 +781,25 @@
       applyDatasets();
     });
 
+    // 중심부(2500까지) 표시 토글
+    document.getElementById("focusCenterBtn").addEventListener("click", () => {
+      const L = t();
+      focusCenterOn = !focusCenterOn;
+
+      // y축 max 설정
+      if (focusCenterOn) {
+        predictionChart.options.scales.y.max = 2500;
+      } else {
+        // 자동 스케일로 되돌리기
+        delete predictionChart.options.scales.y.max;
+      }
+
+      document.getElementById("focusCenterBtn").textContent =
+        focusCenterOn ? L.focusOff : L.focusOn;
+
+      predictionChart.update();
+    });
+
     // 언어 토글
     document.getElementById("langBtn").addEventListener("click", async () => {
       const nextLang = (currentLang === "ko") ? "en" : "ko";
@@ -853,17 +843,23 @@
       });
     });
 
-    // 개별 값 삭제
-    document.getElementById('deleteValueBtn').addEventListener('click', async () => {
+    // 개별 값 삭제: 상단 "특정값 제거" 버튼 → prompt 3개(회차/이름/값)
+    document.getElementById('deleteValueOpenBtn').addEventListener('click', async () => {
       const L = t();
-      const roundInput = document.getElementById('deleteRound').value.trim();
-      const nameInput = document.getElementById('deleteName').value.trim();
-      const valueInput = document.getElementById('deleteValue').value.trim();
 
-      const round = parseInt(roundInput, 10);
-      const value = parseFloat(valueInput);
+      const roundInput = prompt(L.deletePromptRound);
+      if (roundInput === null) return; // 취소
+      const round = parseInt(roundInput.trim(), 10);
 
-      if (!roundInput || isNaN(round) || !nameInput || !valueInput || isNaN(value)) {
+      const nameInputRaw = prompt(L.deletePromptName);
+      if (nameInputRaw === null) return;
+      const nameInput = nameInputRaw.trim();
+
+      const valueInput = prompt(L.deletePromptValue);
+      if (valueInput === null) return;
+      const value = parseFloat(valueInput.trim());
+
+      if (!round || isNaN(round) || !nameInput || isNaN(value)) {
         alert(L.deleteInvalid);
         return;
       }
@@ -890,10 +886,6 @@
         await batch.commit();
 
         alert(L.deleteDone(count));
-
-        document.getElementById('deleteRound').value = "";
-        document.getElementById('deleteName').value = "";
-        document.getElementById('deleteValue').value = "";
       } catch (e) {
         console.error(e);
         alert(L.deleteError);
