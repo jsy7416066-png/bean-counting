@@ -14,13 +14,16 @@
     h1 { font-size: 1.4rem; margin-bottom: 4px; }
     p { font-size: 0.9rem; margin-top: 0; color: #555; }
 
+    /* 우상단 버튼 컨테이너 */
     #top-buttons {
       position: absolute;
       top: 10px;
       right: 10px;
       display: flex;
+      align-items: flex-start;
       gap: 10px;
       z-index: 10;
+      justify-content: flex-end;
     }
 
     .top-button {
@@ -30,25 +33,39 @@
       font-size: 0.8rem;
       border-radius: 4px;
       cursor: pointer;
+      color: #333;
+      white-space: nowrap;
+      text-align: center;
+    }
+    .top-button:hover {
+      background-color: #dcdcdc;
     }
 
+    /* CSV/초기화/English: 세로 스택 */
     .top-stack {
       display: flex;
       flex-direction: column;
       gap: 8px;
     }
 
-    .actual-wide { width: 120px; }
-    .stack-narrow { width: 110px; }
+    /* 실제값공개 버튼: 단독 + 더 넓게 */
+    .actual-wide {
+      width: 120px;
+    }
 
-    #round-buttons, #group-buttons {
+    /* 스택(3개) 버튼: CSV 정도 길이로 통일 */
+    .stack-narrow {
+      width: 110px;
+    }
+
+    /* 회차 버튼 영역 */
+    #round-buttons {
       margin-top: 8px;
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
     }
-
-    .round-button, .group-button {
+    .round-button {
       background-color: #f0f0f0;
       border: 1px solid #ccc;
       padding: 4px 10px;
@@ -56,9 +73,65 @@
       border-radius: 4px;
       cursor: pointer;
     }
-    .round-button.active, .group-button.active {
+    .round-button.active {
       background-color: #ddd;
       font-weight: 600;
+    }
+
+    /* 그룹 버튼 영역 */
+    #group-buttons {
+      margin-top: 8px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .group-button {
+      background-color: #f0f0f0;
+      border: 1px solid #ccc;
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .group-button.active {
+      background-color: #ddd;
+      font-weight: 600;
+    }
+
+    /* 개별 값 삭제 패널 */
+    #delete-panel {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    #delete-panel input {
+      padding: 3px 6px;
+      font-size: 0.8rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    #deleteRound {
+      width: 70px;
+    }
+    #deleteName {
+      width: 120px;
+    }
+    #deleteValue {
+      width: 90px;
+    }
+    #deleteValueBtn {
+      background-color: #f0f0f0;
+      border: 1px solid #ccc;
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #deleteValueBtn:hover {
+      background-color: #ddd;
     }
 
     #chart-container {
@@ -68,146 +141,810 @@
       margin-top: 16px;
     }
 
+    /* 회차 통계 오버레이 */
     #roundOverlay {
       position: absolute;
       top: 10%;
       left: 10%;
       width: 80%;
       height: 60%;
-      background: white;
+      background-color: #ffffff;
       border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      border: 2px solid #666;
       padding: 24px;
       display: none;
       z-index: 5;
+      box-sizing: border-box;
       overflow: auto;
-      border: 2px solid #666;
+    }
+    #roundOverlay h2 {
+      margin-top: 0;
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+    #roundOverlay p {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 6px 0;
+      color: #444;
+    }
+    #roundOverlay p.label-group {
+      margin-top: 8px;
+      margin-bottom: 4px;
+    }
+    #roundOverlay ul {
+      margin: 4px 0 18px 0;
+      padding-left: 20px;
+    }
+    #roundOverlay li {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin: 2px 0;
+    }
+    #roundOverlay p.overall-line,
+    #roundOverlay p.closest-line {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #000;
+      margin-top: 6px;
     }
   </style>
 </head>
 <body>
 
-<div id="top-buttons">
-  <button id="toggleActualBtn" class="top-button actual-wide">실제값 공개</button>
-  <div class="top-stack">
-    <button id="downloadCsvBtn" class="top-button stack-narrow">CSV 다운로드</button>
-    <button id="resetBtn" class="top-button stack-narrow">초기화</button>
-    <button id="langBtn" class="top-button stack-narrow">English</button>
+  <!-- 상단 우측 버튼들 -->
+  <div id="top-buttons">
+    <!-- 실제값공개: 단독(왼쪽) + 더 넓게 -->
+    <button id="toggleActualBtn" class="top-button actual-wide">실제값 공개</button>
+
+    <!-- CSV/초기화/English: 세로로 쌓기 + 같은 폭 -->
+    <div class="top-stack">
+      <button id="downloadCsvBtn" class="top-button stack-narrow">CSV 다운로드</button>
+      <button id="resetBtn" class="top-button stack-narrow">초기화</button>
+      <button id="langBtn" class="top-button stack-narrow">English</button>
+    </div>
   </div>
-</div>
 
-<h1 id="pageTitle">예측치 산점도 (실시간)</h1>
-<p id="pageDesc">
-  X축: 회차(1~6), Y축: 예측치
-</p>
+  <h1 id="pageTitle">예측치 산점도 (실시간)</h1>
+  <p id="pageDesc">
+    X축: 회차(1~6), Y축: 예측치<br/>
+    색깔: <b>그룹 번호</b>별로 구분되어 표시됩니다.<br/>
+    점에 마우스를 올리면 <b>학생 이름 & 그 학생의 전체 추세선</b>이 보입니다.<br/>
+    아래 회차 버튼을 눌러 해당 회차의 <b>그룹별 평균 / 전체 평균 / 평균에 가장 가까운 학생</b>을 확인할 수 있습니다.
+  </p>
 
-<div id="round-buttons">
-  <button class="round-button" data-round="1">1회차</button>
-  <button class="round-button" data-round="2">2회차</button>
-  <button class="round-button" data-round="3">3회차</button>
-  <button class="round-button" data-round="4">4회차</button>
-  <button class="round-button" data-round="5">5회차</button>
-  <button class="round-button" data-round="6">6회차</button>
-</div>
+  <!-- 회차 버튼들 -->
+  <div id="round-buttons">
+    <button class="round-button" data-round="1">1회차</button>
+    <button class="round-button" data-round="2">2회차</button>
+    <button class="round-button" data-round="3">3회차</button>
+    <button class="round-button" data-round="4">4회차</button>
+    <button class="round-button" data-round="5">5회차</button>
+    <button class="round-button" data-round="6">6회차</button>
+  </div>
 
-<div id="group-buttons">
-  <button class="group-button" data-group="1">그룹 1</button>
-  <button class="group-button" data-group="2">그룹 2</button>
-  <button class="group-button" data-group="3">그룹 3</button>
-  <button class="group-button" data-group="4">그룹 4</button>
-  <button class="group-button" data-group="5">그룹 5</button>
-  <button class="group-button" data-group="6">그룹 6</button>
-  <button class="group-button" data-group="7">그룹 7</button>
-  <button class="group-button" data-group="8">그룹 8</button>
-</div>
+  <!-- 그룹 버튼들 -->
+  <div id="group-buttons">
+    <button class="group-button" data-group="1">그룹 1</button>
+    <button class="group-button" data-group="2">그룹 2</button>
+    <button class="group-button" data-group="3">그룹 3</button>
+    <button class="group-button" data-group="4">그룹 4</button>
+    <button class="group-button" data-group="5">그룹 5</button>
+    <button class="group-button" data-group="6">그룹 6</button>
+    <button class="group-button" data-group="7">그룹 7</button>
+    <button class="group-button" data-group="8">그룹 8</button>
+  </div>
 
-<div id="chart-container">
-  <canvas id="predictionChart"></canvas>
-  <div id="roundOverlay"></div>
-</div>
+  <!-- 개별 값 삭제 패널 -->
+  <div id="delete-panel">
+    <input type="number" id="deleteRound" min="1" max="6" placeholder="회차" />
+    <input type="text" id="deleteName" placeholder="이름" />
+    <input type="number" id="deleteValue" placeholder="값" />
+    <button id="deleteValueBtn">값 삭제</button>
+  </div>
 
-<script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore-compat.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <div id="chart-container">
+    <canvas id="predictionChart"></canvas>
+    <div id="roundOverlay"></div>
+  </div>
 
-<script>
-  firebase.initializeApp({
-    apiKey: "AIzaSyD85EPLcL_j7s-WOQ1FDimMKEYmzBFzapE",
-    authDomain: "bean-counting.firebaseapp.com",
-    projectId: "bean-counting"
-  });
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  const db = firebase.firestore();
-  const ACTUAL_VALUE = 1564;
-  let actualVisible = false;
-
-  const TEXT = {
-    ko: {
-      showActual: "실제값 공개",
-      hideActual: "실제값 숨기기",
-      actualTooltip: value => `실제값: ${value}`
-    },
-    en: {
-      showActual: "Show actual",
-      hideActual: "Hide actual",
-      actualTooltip: value => `Actual: ${value}`
-    }
-  };
-
-  let currentLang = "ko";
-  const t = () => TEXT[currentLang];
-
-  function makeActualDataset() {
-    return {
-      type: "line",
-      data: [1,2,3,4,5,6].map(r => ({ x: r, y: ACTUAL_VALUE })),
-      borderColor: "red",
-      borderWidth: 4,
-      pointRadius: 0,
-      _isActualDataset: true
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyD85EPLcL_j7s-WOQ1FDimMKEYmzBFzapE",
+      authDomain: "bean-counting.firebaseapp.com",
+      projectId: "bean-counting",
+      storageBucket: "bean-counting.firebasestorage.app",
+      messagingSenderId: "700257917650",
+      appId: "1:700257917650:web:c7821b3e1b1b5f1a366b0b"
     };
-  }
 
-  const chart = new Chart(
-    document.getElementById("predictionChart"),
-    {
-      type: "scatter",
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const uiDocRef = db.doc('settings/ui');
+
+    const ctx = document.getElementById('predictionChart').getContext('2d');
+    const roundOverlayEl = document.getElementById('roundOverlay');
+    const roundButtons = document.querySelectorAll('.round-button');
+    const groupButtons = document.querySelectorAll('.group-button');
+
+    const ACTUAL_VALUE = 1564;  // ✅ 실제값
+    const RESET_PASSWORD  = "SNU-TA-Reset-9237!";
+
+    // 상태 변수들
+    let baseDatasets = [];        // 현재 차트에 쓸 데이터셋(필터 적용 후)
+    let baseAllDatasets = [];     // 전체 그룹 데이터셋(필터 전)
+    let highlightDataset = null;
+    let groupMeanDataset = null;  // 그룹 평균 점 데이터셋(필터 시)
+    let actualVisible   = false;
+    let allPoints       = [];     // 필터 적용 후 포인트
+    let allPointsAll    = [];     // 전체 포인트(필터 전)
+    let roundStats      = {};
+    let currentRoundShown = null;
+    let currentGroupShown = null; // 현재 필터 중인 그룹(1~8)
+    let currentLang     = 'ko';
+
+    const TEXT = {
+      ko: {
+        htmlLang: "ko",
+        docTitle: "예측치 대시보드",
+        pageTitle: "예측치 산점도 (실시간)",
+        pageDescHtml:
+          `X축: 회차(1~6), Y축: 예측치<br/>
+           색깔: <b>그룹 번호</b>별로 구분되어 표시됩니다.<br/>
+           점에 마우스를 올리면 <b>학생 이름 & 그 학생의 전체 추세선</b>이 보입니다.<br/>
+           아래 회차 버튼을 눌러 해당 회차의 <b>그룹별 평균 / 전체 평균 / 평균에 가장 가까운 학생</b>을 확인할 수 있습니다.`,
+        showActual: "실제값 공개",
+        hideActual: "실제값 숨기기",
+        downloadCsv: "CSV 다운로드",
+        reset: "초기화",
+        resetPrompt: "초기화 비밀번호를 입력하세요:",
+        resetConfirm: "⚠ 정말 모든 데이터를 삭제할까요?",
+        resetDone: "모든 데이터가 초기화되었습니다!",
+        badPassword: "비밀번호가 올바르지 않습니다.",
+        tooltipUnknown: "이름 미상",
+        tooltipLabel: (name, round, value) => `${name} - ${round}회차: ${value}`,
+        xTitle: "회차",
+        yTitle: "예측치",
+        xTick: (v) => `${v}회차`,
+        groupLabel: (g) => `그룹 ${g}`,
+        trendLabel: (name) => `${name} 추세`,
+        overlayTitle: (r) => `${r}회차 통계`,
+        overlayGroupMeans: "그룹별 평균",
+        overlayNoData: "데이터 없음",
+        overlayOverall: (overall) => `전체 평균: <b>${overall}</b>`,
+        overlayClosest: (closest) =>
+          closest
+            ? `전체 평균에 가장 가까운 학생: <b>${closest.name}</b> (값 ${closest.value}, 그룹 ${closest.group})`
+            : `전체 평균에 가장 가까운 학생: 정보 없음`,
+        roundBtn: (r) => `${r}회차`,
+        actualLabel: "실제값",
+        groupBtn: (g) => `그룹 ${g}`,
+        groupMeanLegend: (g) => `그룹 ${g} 평균`,
+        groupMeanTrendLabel: (g) => `그룹 ${g} 평균 추세`,
+        groupMeanTooltip: (g, round, value) => `그룹 ${g} 평균 - ${round}회차: ${value}`,
+        deleteBtn: "값 삭제",
+        deleteRoundPh: "회차",
+        deleteNamePh: "이름",
+        deleteValuePh: "값",
+        deleteInvalid: "라운드, 이름, 값을 모두 올바르게 입력해주세요.",
+        deleteConfirm: (round, name, value, count) =>
+          `다음 조건과 일치하는 값 ${count}개를 삭제할까요?\n\n회차: ${round}\n이름: ${name}\n값: ${value}`,
+        deleteDone: (count) => `${count}개의 값이 삭제되었습니다.`,
+        deleteNotFound: "해당 조건과 일치하는 값이 없습니다.",
+        deleteError: "값 삭제 중 오류가 발생했습니다.",
+        actualTooltip: (round, value) => `실제값 - ${round}회차: ${value}`
+      },
+      en: {
+        htmlLang: "en",
+        docTitle: "Prediction Dashboard",
+        pageTitle: "Prediction Scatter Plot (Real-Time)",
+        pageDescHtml:
+          `X-axis: Round (1–6), Y-axis: Prediction value<br/>
+           Colors indicate <b>group numbers</b>.<br/>
+           Hover over a point to see the <b>student name & their overall trend line</b>.<br/>
+           Use the round buttons below to view <b>group means / overall mean / the student closest to the mean</b>.`,
+        showActual: "Show actual value",
+        hideActual: "Hide actual value",
+        downloadCsv: "Download CSV",
+        reset: "Reset",
+        resetPrompt: "Enter the reset password:",
+        resetConfirm: "⚠ Are you sure you want to delete ALL data?",
+        resetDone: "All data has been reset!",
+        badPassword: "Incorrect password.",
+        tooltipUnknown: "Unknown",
+        tooltipLabel: (name, round, value) => `${name} - Round ${round}: ${value}`,
+        xTitle: "Round",
+        yTitle: "Prediction Value",
+        xTick: (v) => `Round ${v}`,
+        groupLabel: (g) => `Group ${g}`,
+        trendLabel: (name) => `${name} Trend`,
+        overlayTitle: (r) => `Round ${r} Statistics`,
+        overlayGroupMeans: "Group means",
+        overlayNoData: "No data",
+        overlayOverall: (overall) => `Overall mean: <b>${overall}</b>`,
+        overlayClosest: (closest) =>
+          closest
+            ? `Closest to overall mean: <b>${closest.name}</b> (value ${closest.value}, group ${closest.group})`
+            : `Closest to overall mean: No info`,
+        roundBtn: (r) => `Round ${r}`,
+        actualLabel: "Actual",
+        groupBtn: (g) => `Group ${g}`,
+        groupMeanLegend: (g) => `Group ${g} mean`,
+        groupMeanTrendLabel: (g) => `Group ${g} mean trend`,
+        groupMeanTooltip: (g, round, value) => `Group ${g} mean - Round ${round}: ${value}`,
+        deleteBtn: "Delete value",
+        deleteRoundPh: "Round",
+        deleteNamePh: "Name",
+        deleteValuePh: "Value",
+        deleteInvalid: "Please enter valid round, name, and value.",
+        deleteConfirm: (round, name, value, count) =>
+          `Delete ${count} value(s) matching:\n\nRound: ${round}\nName: ${name}\nValue: ${value}?`,
+        deleteDone: (count) => `${count} value(s) deleted.`,
+        deleteNotFound: "No matching values found.",
+        deleteError: "An error occurred while deleting the value.",
+        actualTooltip: (round, value) => `Actual - Round ${round}: ${value}`
+      }
+    };
+
+    function t() {
+      return TEXT[currentLang] || TEXT.ko;
+    }
+
+    function updateDatasetLabels() {
+      const L = t();
+      baseDatasets.forEach(ds => {
+        if (ds && ds._groupName != null) ds.label = L.groupLabel(ds._groupName);
+      });
+      if (groupMeanDataset && groupMeanDataset._groupName != null) {
+        groupMeanDataset.label = L.groupMeanLegend(groupMeanDataset._groupName);
+      }
+      if (highlightDataset && highlightDataset._name) {
+        highlightDataset.label = L.trendLabel(highlightDataset._name);
+      }
+    }
+
+    function showRoundOverlay(round) {
+      const stats = roundStats[round];
+      if (!stats) {
+        roundOverlayEl.style.display = 'none';
+        currentRoundShown = null;
+        return;
+      }
+
+      const L = t();
+
+      const groupLines = Object.keys(stats.groupMeans)
+        .sort((a, b) => {
+          const na = Number(a), nb = Number(b);
+          const aNum = Number.isFinite(na), bNum = Number.isFinite(nb);
+          if (aNum && bNum) return na - nb;
+          return String(a).localeCompare(String(b), 'ko');
+        })
+        .map(g => `<li>${L.groupLabel(g)}: ${stats.groupMeans[g].toFixed(1)}</li>`)
+        .join("");
+
+      const overall = stats.overallMean.toFixed(1);
+      const closest = stats.closest;
+
+      roundOverlayEl.innerHTML = `
+        <h2>${L.overlayTitle(round)}</h2>
+        <p class="label-group">${L.overlayGroupMeans}</p>
+        <ul>${groupLines || `<li>${L.overlayNoData}</li>`}</ul>
+        <p class="overall-line">${L.overlayOverall(overall)}</p>
+        <p class="closest-line">${L.overlayClosest(closest)}</p>
+      `;
+
+      roundOverlayEl.style.display = 'block';
+      currentRoundShown = round;
+    }
+
+    // CSV escape
+    function csvEscape(v) {
+      const s = String(v ?? "");
+      if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    }
+
+    function makeActualDataset() {
+      const lineData = [];
+      for (let r = 1; r <= 6; r++) lineData.push({ x: r, y: ACTUAL_VALUE });
+      return {
+        type: 'line',
+        label: t().actualLabel,
+        data: lineData,
+        borderColor: 'red',
+        borderWidth: 4,
+        pointRadius: 0,
+        fill: false,
+        _isActual: true,
+        _isActualDataset: true
+      };
+    }
+
+    function buildGroupMeanDataset() {
+      if (currentGroupShown == null) {
+        groupMeanDataset = null;
+        return;
+      }
+      const g = String(currentGroupShown);
+      const L = t();
+      const points = [];
+
+      for (let r = 1; r <= 6; r++) {
+        const stats = roundStats[r];
+        if (!stats || !stats.groupMeans) continue;
+        const mean = stats.groupMeans[g];
+        if (typeof mean === 'number' && !isNaN(mean)) {
+          points.push({
+            x: r,
+            y: mean,
+            group: g,
+            _isGroupMean: true
+          });
+        }
+      }
+
+      if (points.length === 0) {
+        groupMeanDataset = null;
+        return;
+      }
+
+      groupMeanDataset = {
+        type: 'scatter',
+        label: L.groupMeanLegend(g),
+        data: points,
+        pointRadius: 6,              // 일반 점(4)보다 살짝 크게
+        pointBackgroundColor: '#000000',
+        pointBorderColor: '#000000',
+        showLine: false,
+        _isGroupMeanDataset: true,
+        _groupName: g
+      };
+    }
+
+    function refreshFilteredBase() {
+      if (currentGroupShown == null) {
+        baseDatasets = [...baseAllDatasets];
+        allPoints = [...allPointsAll];
+      } else {
+        const g = String(currentGroupShown);
+        baseDatasets = baseAllDatasets.filter(ds => String(ds._groupName) === g);
+        allPoints = allPointsAll.filter(p => String(p.group) === g);
+      }
+      buildGroupMeanDataset();
+    }
+
+    function applyGroupFilterUI() {
+      groupButtons.forEach(b => b.classList.remove('active'));
+      if (currentGroupShown != null) {
+        const activeBtn = document.querySelector(`.group-button[data-group="${currentGroupShown}"]`);
+        if (activeBtn) activeBtn.classList.add('active');
+      }
+    }
+
+    function applyDatasets() {
+      const datasets = [...baseDatasets];
+      if (currentGroupShown != null && groupMeanDataset) datasets.push(groupMeanDataset);
+      if (actualVisible) datasets.push(makeActualDataset());
+      if (highlightDataset) datasets.push(highlightDataset);
+      predictionChart.data.datasets = datasets;
+      predictionChart.update();
+    }
+
+    function tooltipLabelCallback(context) {
+      const L = t();
+      const p = context.raw;
+      const round = context.parsed.x;
+      const value = context.parsed.y;
+
+      if (context.dataset && context.dataset._isActualDataset) {
+        return L.actualTooltip(round, value);
+      }
+
+      if (p && p._isGroupMean && p.group != null) {
+        const g = String(p.group);
+        return L.groupMeanTooltip(g, round, value);
+      }
+
+      const name = (p && p.name) ? p.name : L.tooltipUnknown;
+      return L.tooltipLabel(name, round, value);
+    }
+
+    const predictionChart = new Chart(ctx, {
+      type: 'scatter',
       data: { datasets: [] },
       options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
         plugins: {
+          legend: { display: true },
           tooltip: {
             callbacks: {
-              label: ctx => {
-                if (ctx.dataset._isActualDataset) {
-                  return t().actualTooltip(ACTUAL_VALUE);
-                }
-                return `${ctx.raw?.name ?? ""}: ${ctx.parsed.y}`;
-              }
+              label: tooltipLabelCallback
             }
           }
         },
         scales: {
-          x: { min: 1, max: 6 },
-          y: {}
+          x: {
+            type: 'linear',
+            position: 'bottom',
+            title: { display: true, text: '회차' },
+            ticks: { stepSize: 1, callback: v => `${v}회차` },
+            min: 1,
+            max: 6
+          },
+          y: { title: { display: true, text: '예측치' } }
+        },
+        onHover: (event, activeElements, chart) => {
+          if (activeElements.length > 0) {
+            const first = activeElements[0];
+            const dsIndex = first.datasetIndex;
+            const index = first.index;
+            const ds = chart.data.datasets[dsIndex];
+            const point = ds.data[index];
+
+            // 그룹 평균 점 위에 올렸을 때: 그룹 평균 추세선
+            if (point && point._isGroupMean && point.group) {
+              const g = String(point.group);
+              const points = [];
+              for (let r = 1; r <= 6; r++) {
+                const stats = roundStats[r];
+                if (!stats || !stats.groupMeans) continue;
+                const mean = stats.groupMeans[g];
+                if (typeof mean === 'number' && !isNaN(mean)) {
+                  points.push({ x: r, y: mean });
+                }
+              }
+              if (points.length > 1) {
+                highlightDataset = {
+                  type: 'line',
+                  label: t().groupMeanTrendLabel(g),
+                  data: points,
+                  borderColor: 'rgba(0,0,0,0.7)',
+                  borderWidth: 2,
+                  pointRadius: 0,
+                  fill: false,
+                  borderDash: [4, 3]
+                };
+              } else {
+                highlightDataset = null;
+              }
+              applyDatasets();
+              return;
+            }
+
+            // 일반 학생 점 위에 올렸을 때: 그 학생 추세선
+            const name = point && point.name;
+            if (name) {
+              const personPoints = allPoints
+                .filter(p => p.name === name)
+                .sort((a, b) => a.round - b.round)
+                .map(p => ({ x: p.round, y: p.value }));
+
+              if (personPoints.length > 1) {
+                highlightDataset = {
+                  type: 'line',
+                  label: t().trendLabel(name),
+                  data: personPoints,
+                  borderColor: 'rgba(0,0,0,0.6)',
+                  borderWidth: 2,
+                  pointRadius: 0,
+                  fill: false,
+                  borderDash: [4, 3],
+                  _name: name
+                };
+              } else {
+                highlightDataset = null;
+              }
+              applyDatasets();
+            }
+          } else {
+            if (highlightDataset) {
+              highlightDataset = null;
+              applyDatasets();
+            }
+          }
         }
       }
+    });
+    window.predictionChart = predictionChart;
+
+    const groupColors = [
+      '#e41a1c', '#377eb8', '#4daf4a', '#984ea3',
+      '#ff7f00', '#a65628', '#f781bf', '#999999'
+    ];
+
+    db.collection('predictions')
+      .orderBy('round', 'asc')
+      .onSnapshot((snapshot) => {
+        const groupMap = {};
+        allPointsAll = [];
+
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const group = (data.group || '기타').toString();
+          if (typeof data.round === 'number' && typeof data.value === 'number') {
+            if (!groupMap[group]) groupMap[group] = [];
+            groupMap[group].push({ x: data.round, y: data.value, name: data.name || '' });
+            allPointsAll.push({ name: data.name || '', group, round: data.round, value: data.value });
+          }
+        });
+
+        const groupNames = Object.keys(groupMap).sort((a, b) => {
+          const na = Number(a), nb = Number(b);
+          const aNum = Number.isFinite(na), bNum = Number.isFinite(nb);
+          if (aNum && bNum) return na - nb;
+          return String(a).localeCompare(String(b), 'ko');
+        });
+
+        baseAllDatasets = groupNames.map((groupName, idx) => ({
+          label: t().groupLabel(groupName),
+          data: groupMap[groupName],
+          pointRadius: 4,
+          backgroundColor: groupColors[idx % groupColors.length],
+          _groupName: groupName
+        }));
+
+        // 전체 데이터 기준으로 회차 통계 계산
+        roundStats = {};
+        const roundGroupValues = {};
+        const roundAllValues   = {};
+
+        allPointsAll.forEach(p => {
+          if (!roundGroupValues[p.round]) roundGroupValues[p.round] = {};
+          if (!roundGroupValues[p.round][p.group]) roundGroupValues[p.round][p.group] = [];
+          roundGroupValues[p.round][p.group].push(p.value);
+
+          if (!roundAllValues[p.round]) roundAllValues[p.round] = [];
+          roundAllValues[p.round].push({ name: p.name, group: p.group, value: p.value });
+        });
+
+        for (let r = 1; r <= 6; r++) {
+          if (!roundAllValues[r]) continue;
+
+          const groupMeans = {};
+          Object.keys(roundGroupValues[r] || {}).forEach(g => {
+            const arr = roundGroupValues[r][g];
+            const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+            groupMeans[g] = mean;
+          });
+
+          const allArr = roundAllValues[r];
+          const overallMean = allArr.reduce((a, p) => a + p.value, 0) / allArr.length;
+
+          let closest = null;
+          let bestDiff = Infinity;
+          allArr.forEach(p => {
+            const diff = Math.abs(p.value - overallMean);
+            if (diff < bestDiff) {
+              bestDiff = diff;
+              closest = p;
+            }
+          });
+
+          roundStats[r] = { groupMeans, overallMean, closest };
+        }
+
+        // 현재 그룹 필터 적용 후 차트 반영
+        refreshFilteredBase();
+        applyDatasets();
+      });
+
+    function applyLanguageToStaticUI() {
+      const L = t();
+
+      document.documentElement.lang = L.htmlLang;
+      document.title = L.docTitle;
+
+      document.getElementById('pageTitle').textContent = L.pageTitle;
+      document.getElementById('pageDesc').innerHTML = L.pageDescHtml;
+
+      document.getElementById('langBtn').textContent = (currentLang === "ko") ? "English" : "한국어";
+      document.getElementById('downloadCsvBtn').textContent = L.downloadCsv;
+      document.getElementById('resetBtn').textContent = L.reset;
+
+      document.getElementById("toggleActualBtn").textContent =
+        actualVisible ? L.hideActual : L.showActual;
+
+      roundButtons.forEach(btn => {
+        const r = parseInt(btn.dataset.round, 10);
+        btn.textContent = L.roundBtn(r);
+      });
+
+      groupButtons.forEach(btn => {
+        const g = btn.dataset.group;
+        btn.textContent = L.groupBtn(g);
+      });
+
+      // 삭제 패널 텍스트/placeholder
+      document.getElementById('deleteValueBtn').textContent = L.deleteBtn;
+      document.getElementById('deleteRound').placeholder = L.deleteRoundPh;
+      document.getElementById('deleteName').placeholder = L.deleteNamePh;
+      document.getElementById('deleteValue').placeholder = L.deleteValuePh;
+
+      // 차트 아직 없으면 여기서 종료
+      if (!window.predictionChart) return;
+
+      // 언어 바뀔 때 그룹 평균 데이터셋 라벨도 재구성
+      buildGroupMeanDataset();
+
+      predictionChart.options.scales.x.title.text = L.xTitle;
+      predictionChart.options.scales.y.title.text = L.yTitle;
+      predictionChart.options.scales.x.ticks.callback = (v) => L.xTick(v);
+
+      predictionChart.options.plugins.tooltip.callbacks.label = tooltipLabelCallback;
+
+      updateDatasetLabels();
+      if (currentRoundShown != null) showRoundOverlay(currentRoundShown);
+
+      predictionChart.update();
     }
-  );
 
-  document.getElementById("toggleActualBtn").onclick = () => {
-    actualVisible = !actualVisible;
-    document.getElementById("toggleActualBtn").textContent =
-      actualVisible ? t().hideActual : t().showActual;
+    uiDocRef.onSnapshot(async (doc) => {
+      if (!doc.exists) {
+        try { await uiDocRef.set({ lang: "ko" }, { merge: true }); } catch (e) {}
+        return;
+      }
+      const lang = (doc.data() && doc.data().lang) ? doc.data().lang : "ko";
+      if (lang !== "ko" && lang !== "en") return;
 
-    chart.data.datasets = actualVisible ? [makeActualDataset()] : [];
-    chart.update();
-  };
+      currentLang = lang;
+      applyLanguageToStaticUI();
+    });
 
-  document.getElementById("langBtn").onclick = () => {
-    currentLang = currentLang === "ko" ? "en" : "ko";
-    document.getElementById("toggleActualBtn").textContent =
-      actualVisible ? t().hideActual : t().showActual;
-  };
-</script>
+    document.getElementById("downloadCsvBtn").addEventListener("click", async () => {
+      const snapshot = await db.collection("predictions").get();
+      const rows = [["name","group","round","value","timestamp"]];
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        const ts = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toISOString() : "";
+        rows.push([d.name ?? "", d.group ?? "", d.round ?? "", d.value ?? "", ts]);
+      });
 
+      const csvContent = "data:text/csv;charset=utf-8,\ufeff" +
+        rows.map(row => row.map(csvEscape).join(",")).join("\n");
+      const link = document.createElement("a");
+      link.href = encodeURI(csvContent);
+      link.download = "predictions_backup_" + new Date().toISOString().slice(0, 10) + ".csv";
+      link.click();
+    });
+
+    // 실제값 공개: 비밀번호 없이 토글
+    document.getElementById("toggleActualBtn").addEventListener("click", () => {
+      const L = t();
+      actualVisible = !actualVisible;
+      document.getElementById("toggleActualBtn").textContent =
+        actualVisible ? L.hideActual : L.showActual;
+      applyDatasets();
+    });
+
+    // 언어 변경: 비밀번호 없이 토글
+    document.getElementById("langBtn").addEventListener("click", async () => {
+      const nextLang = (currentLang === "ko") ? "en" : "ko";
+      try {
+        await uiDocRef.set({ lang: nextLang }, { merge: true });
+      } catch (e) {
+        alert("Failed to change language. (Firestore write blocked)");
+      }
+    });
+
+    function hideRoundOverlay() {
+      roundOverlayEl.style.display = 'none';
+      currentRoundShown = null;
+    }
+
+    roundButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const round = parseInt(btn.dataset.round, 10);
+        if (currentRoundShown === round) {
+          hideRoundOverlay();
+          roundButtons.forEach(b => b.classList.remove('active'));
+        } else {
+          showRoundOverlay(round);
+          roundButtons.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        }
+      });
+    });
+
+    // 그룹 버튼: 필터 토글
+    groupButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const g = btn.dataset.group;
+
+        if (currentGroupShown === g) {
+          currentGroupShown = null; // 해제
+        } else {
+          currentGroupShown = g;
+        }
+
+        refreshFilteredBase();
+        applyGroupFilterUI();
+
+        // 필터 변경 시 추세선 초기화
+        if (highlightDataset) highlightDataset = null;
+
+        applyDatasets();
+      });
+    });
+
+    // 개별 값 삭제
+    document.getElementById('deleteValueBtn').addEventListener('click', async () => {
+      const L = t();
+      const roundInput = document.getElementById('deleteRound').value.trim();
+      const nameInput = document.getElementById('deleteName').value.trim();
+      const valueInput = document.getElementById('deleteValue').value.trim();
+
+      const round = parseInt(roundInput, 10);
+      const value = parseFloat(valueInput);
+
+      if (!roundInput || isNaN(round) || !nameInput || !valueInput || isNaN(value)) {
+        alert(L.deleteInvalid);
+        return;
+      }
+
+      try {
+        let query = db.collection('predictions')
+          .where('round', '==', round)
+          .where('name', '==', nameInput)
+          .where('value', '==', value);
+
+        const snapshot = await query.get();
+        const count = snapshot.size;
+
+        if (count === 0) {
+          alert(L.deleteNotFound);
+          return;
+        }
+
+        const ok = confirm(L.deleteConfirm(round, nameInput, value, count));
+        if (!ok) return;
+
+        const batch = db.batch();
+        snapshot.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+
+        alert(L.deleteDone(count));
+
+        // 입력칸 초기화
+        document.getElementById('deleteRound').value = "";
+        document.getElementById('deleteName').value = "";
+        document.getElementById('deleteValue').value = "";
+      } catch (e) {
+        console.error(e);
+        alert(L.deleteError);
+      }
+    });
+
+    // 초기화(비밀번호 유지)
+    document.getElementById("resetBtn").addEventListener("click", async () => {
+      const L = t();
+      const input = prompt(L.resetPrompt);
+
+      if (input !== RESET_PASSWORD) {
+        alert(L.badPassword);
+        return;
+      }
+
+      const really = confirm(L.resetConfirm);
+      if (!really) return;
+
+      const snapshot = await db.collection("predictions").get();
+      const batch = db.batch();
+      snapshot.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+
+      alert(L.resetDone);
+      hideRoundOverlay();
+      roundButtons.forEach(b => b.classList.remove('active'));
+    });
+  </script>
 </body>
 </html>
