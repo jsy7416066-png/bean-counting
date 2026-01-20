@@ -37,9 +37,7 @@
       white-space: nowrap;
       text-align: center;
     }
-    .top-button:hover {
-      background-color: #dcdcdc;
-    }
+    .top-button:hover { background-color: #dcdcdc; }
 
     /* CSV/초기화/English: 세로 스택 */
     .top-stack {
@@ -49,14 +47,10 @@
     }
 
     /* 실제값공개 버튼: 단독 + 더 넓게 */
-    .actual-wide {
-      width: 120px;
-    }
+    .actual-wide { width: 120px; }
 
     /* 스택(3개) 버튼: CSV 정도 길이로 통일 */
-    .stack-narrow {
-      width: 110px;
-    }
+    .stack-narrow { width: 110px; }
 
     /* 회차 버튼 영역 */
     #round-buttons {
@@ -113,15 +107,10 @@
       border-radius: 4px;
       box-sizing: border-box;
     }
-    #deleteRound {
-      width: 70px;
-    }
-    #deleteName {
-      width: 120px;
-    }
-    #deleteValue {
-      width: 90px;
-    }
+    #deleteRound { width: 70px; }
+    #deleteName  { width: 120px; }
+    #deleteValue { width: 90px; }
+
     #deleteValueBtn {
       background-color: #f0f0f0;
       border: 1px solid #ccc;
@@ -130,9 +119,7 @@
       border-radius: 4px;
       cursor: pointer;
     }
-    #deleteValueBtn:hover {
-      background-color: #ddd;
-    }
+    #deleteValueBtn:hover { background-color: #ddd; }
 
     #chart-container {
       position: relative;
@@ -195,10 +182,7 @@
 
   <!-- 상단 우측 버튼들 -->
   <div id="top-buttons">
-    <!-- 실제값공개: 단독(왼쪽) + 더 넓게 -->
     <button id="toggleActualBtn" class="top-button actual-wide">실제값 공개</button>
-
-    <!-- CSV/초기화/English: 세로로 쌓기 + 같은 폭 -->
     <div class="top-stack">
       <button id="downloadCsvBtn" class="top-button stack-narrow">CSV 다운로드</button>
       <button id="resetBtn" class="top-button stack-narrow">초기화</button>
@@ -273,7 +257,7 @@
     const roundButtons = document.querySelectorAll('.round-button');
     const groupButtons = document.querySelectorAll('.group-button');
 
-    const ACTUAL_VALUE = 1564;  // ✅ 실제값
+    const ACTUAL_VALUE = 1564;
     const RESET_PASSWORD  = "SNU-TA-Reset-9237!";
 
     // 상태 변수들
@@ -338,7 +322,9 @@
         deleteDone: (count) => `${count}개의 값이 삭제되었습니다.`,
         deleteNotFound: "해당 조건과 일치하는 값이 없습니다.",
         deleteError: "값 삭제 중 오류가 발생했습니다.",
-        actualTooltip: (round, value) => `실제값 - ${round}회차: ${value}`
+
+        // ✅ 여기 핵심: 실제값 툴팁은 “실제값: 1564”만
+        actualTooltip: (value) => `실제값: ${value}`
       },
       en: {
         htmlLang: "en",
@@ -388,13 +374,13 @@
         deleteDone: (count) => `${count} value(s) deleted.`,
         deleteNotFound: "No matching values found.",
         deleteError: "An error occurred while deleting the value.",
-        actualTooltip: (round, value) => `Actual - Round ${round}: ${value}`
+
+        // ✅ 여기 핵심: Actual tooltip은 “Actual: 1564”만
+        actualTooltip: (value) => `Actual: ${value}`
       }
     };
 
-    function t() {
-      return TEXT[currentLang] || TEXT.ko;
-    }
+    function t() { return TEXT[currentLang] || TEXT.ko; }
 
     function updateDatasetLabels() {
       const L = t();
@@ -462,7 +448,6 @@
         borderWidth: 4,
         pointRadius: 0,
         fill: false,
-        _isActual: true,
         _isActualDataset: true
       };
     }
@@ -481,12 +466,7 @@
         if (!stats || !stats.groupMeans) continue;
         const mean = stats.groupMeans[g];
         if (typeof mean === 'number' && !isNaN(mean)) {
-          points.push({
-            x: r,
-            y: mean,
-            group: g,
-            _isGroupMean: true
-          });
+          points.push({ x: r, y: mean, group: g, _isGroupMean: true });
         }
       }
 
@@ -499,7 +479,7 @@
         type: 'scatter',
         label: L.groupMeanLegend(g),
         data: points,
-        pointRadius: 6,              // 일반 점(4)보다 살짝 크게
+        pointRadius: 6,
         pointBackgroundColor: '#000000',
         pointBorderColor: '#000000',
         showLine: false,
@@ -537,21 +517,26 @@
       predictionChart.update();
     }
 
+    // ✅ 툴팁: actual은 “실제값: 1564 / Actual: 1564”만 뜨게
     function tooltipLabelCallback(context) {
       const L = t();
       const p = context.raw;
+
+      // Actual dataset (line)
+      if (context.dataset && context.dataset._isActualDataset) {
+        return L.actualTooltip(ACTUAL_VALUE);
+      }
+
       const round = context.parsed.x;
       const value = context.parsed.y;
 
-      if (context.dataset && context.dataset._isActualDataset) {
-        return L.actualTooltip(round, value);
-      }
-
+      // Group mean point
       if (p && p._isGroupMean && p.group != null) {
         const g = String(p.group);
         return L.groupMeanTooltip(g, round, value);
       }
 
+      // Student point
       const name = (p && p.name) ? p.name : L.tooltipUnknown;
       return L.tooltipLabel(name, round, value);
     }
@@ -565,11 +550,7 @@
         animation: false,
         plugins: {
           legend: { display: true },
-          tooltip: {
-            callbacks: {
-              label: tooltipLabelCallback
-            }
-          }
+          tooltip: { callbacks: { label: tooltipLabelCallback } }
         },
         scales: {
           x: {
@@ -590,7 +571,7 @@
             const ds = chart.data.datasets[dsIndex];
             const point = ds.data[index];
 
-            // 그룹 평균 점 위에 올렸을 때: 그룹 평균 추세선
+            // 그룹 평균 점 위: 그룹 평균 추세선
             if (point && point._isGroupMean && point.group) {
               const g = String(point.group);
               const points = [];
@@ -598,9 +579,7 @@
                 const stats = roundStats[r];
                 if (!stats || !stats.groupMeans) continue;
                 const mean = stats.groupMeans[g];
-                if (typeof mean === 'number' && !isNaN(mean)) {
-                  points.push({ x: r, y: mean });
-                }
+                if (typeof mean === 'number' && !isNaN(mean)) points.push({ x: r, y: mean });
               }
               if (points.length > 1) {
                 highlightDataset = {
@@ -620,7 +599,7 @@
               return;
             }
 
-            // 일반 학생 점 위에 올렸을 때: 그 학생 추세선
+            // 학생 점 위: 학생 추세선
             const name = point && point.name;
             if (name) {
               const personPoints = allPoints
@@ -661,6 +640,7 @@
       '#ff7f00', '#a65628', '#f781bf', '#999999'
     ];
 
+    // Firestore realtime
     db.collection('predictions')
       .orderBy('round', 'asc')
       .onSnapshot((snapshot) => {
@@ -692,7 +672,7 @@
           _groupName: groupName
         }));
 
-        // 전체 데이터 기준으로 회차 통계 계산
+        // 라운드 통계 (전체 기준)
         roundStats = {};
         const roundGroupValues = {};
         const roundAllValues   = {};
@@ -732,7 +712,6 @@
           roundStats[r] = { groupMeans, overallMean, closest };
         }
 
-        // 현재 그룹 필터 적용 후 차트 반영
         refreshFilteredBase();
         applyDatasets();
       });
@@ -769,10 +748,8 @@
       document.getElementById('deleteName').placeholder = L.deleteNamePh;
       document.getElementById('deleteValue').placeholder = L.deleteValuePh;
 
-      // 차트 아직 없으면 여기서 종료
       if (!window.predictionChart) return;
 
-      // 언어 바뀔 때 그룹 평균 데이터셋 라벨도 재구성
       buildGroupMeanDataset();
 
       predictionChart.options.scales.x.title.text = L.xTitle;
@@ -816,7 +793,7 @@
       link.click();
     });
 
-    // 실제값 공개: 비밀번호 없이 토글
+    // 실제값 공개: 토글
     document.getElementById("toggleActualBtn").addEventListener("click", () => {
       const L = t();
       actualVisible = !actualVisible;
@@ -825,7 +802,7 @@
       applyDatasets();
     });
 
-    // 언어 변경: 비밀번호 없이 토글
+    // 언어 변경: 토글
     document.getElementById("langBtn").addEventListener("click", async () => {
       const nextLang = (currentLang === "ko") ? "en" : "ko";
       try {
@@ -858,19 +835,12 @@
     groupButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         const g = btn.dataset.group;
-
-        if (currentGroupShown === g) {
-          currentGroupShown = null; // 해제
-        } else {
-          currentGroupShown = g;
-        }
+        currentGroupShown = (currentGroupShown === g) ? null : g;
 
         refreshFilteredBase();
         applyGroupFilterUI();
 
-        // 필터 변경 시 추세선 초기화
         if (highlightDataset) highlightDataset = null;
-
         applyDatasets();
       });
     });
@@ -891,7 +861,7 @@
       }
 
       try {
-        let query = db.collection('predictions')
+        const query = db.collection('predictions')
           .where('round', '==', round)
           .where('name', '==', nameInput)
           .where('value', '==', value);
@@ -913,7 +883,6 @@
 
         alert(L.deleteDone(count));
 
-        // 입력칸 초기화
         document.getElementById('deleteRound').value = "";
         document.getElementById('deleteName').value = "";
         document.getElementById('deleteValue').value = "";
